@@ -1,0 +1,37 @@
+# ── Dependencias ──
+node_modules/
+
+# ── Builds ──
+dist/
+release/
+build/*.ico
+build/*.icns
+
+# ── Config con datos locales/sensibles ──
+# cloudConfig.js no es "secreto" (la anon key está pensada para ser pública),
+# pero cada quien puede tener su propio proyecto de Supabase de prueba,
+# así que no se versiona para no pisarse entre entornos.
+src/cloud/cloudConfig.js
+.env
+.env.*
+!.env.example
+
+# ── Backups manuales ──
+# Regla para que nunca más quede un .bak versionado por accidente
+# (si necesitás un respaldo puntual, usa git commit / git stash, no esto).
+*.bak
+*.bak-*
+*.backup
+
+# ── Editor / OS ──
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ── Logs ──
+*.log
+npm-debug.log*
+
+# ── Vitest / coverage ──
+coverage/
