@@ -52,6 +52,11 @@
         "nsis",
         "portable"
       ]
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "norkelisbvt",
+      "repo": "Tradingjournal"
     }
   }
 }

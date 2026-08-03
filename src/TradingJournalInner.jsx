@@ -36,6 +36,7 @@ const MindsetView = lazy(() => import("./components/routine/MindsetView").then(m
 const AccountComparisonView = lazy(() => import("./components/statistics/AccountComparisonView").then(m => ({ default: m.AccountComparisonView })));
 const StatisticsView = lazy(() => import("./components/statistics/StatisticsView").then(m => ({ default: m.StatisticsView })));
 import { TradeForm } from "./components/trades/TradeForm";
+import { EmotionCorrelationPanel } from "./components/trades/EmotionCorrelationPanel";
 import { useReminders } from "./hooks/useReminders";
 import { useThemeColorMeta } from "./hooks/useThemeColorMeta";
 import { useUndoToast } from "./hooks/useUndoToast";
@@ -2241,6 +2242,8 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
             setGoals={updater => setMonthlyGoals(prev => ({ ...prev, [account]: typeof updater === "function" ? updater(prev[account] || {}) : updater }))}
             accentColor={accentColor}
           />
+
+          <EmotionCorrelationPanel trades={monthlyGroups.flatMap(([, mt]) => mt)} accountSize={accounts[account].size} />
 
           {monthlyGroups.length === 0 ? (
             <div className="hz-card" style={S.card}>

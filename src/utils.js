@@ -336,6 +336,21 @@ export function exportTradesToCSV(trades, filename) {
 // Calcula métricas avanzadas de performance sobre un set de trades ya filtrado y
 // ordenado cronológicamente: drawdown máximo, expectancy, distribución de
 // R-múltiplos, y Sharpe/Sortino ratio (sobre retornos por trade, sin anualizar).
+// ─── R-múltiplo de un trade individual ─────────────────────────────────────
+// Extraído de computeAdvancedMetrics para poder reusar EXACTAMENTE el mismo
+// criterio en otros cálculos (ej. computeEmotionStats) sin duplicar la lógica
+// ni arriesgar que los dos lugares terminen calculando el R distinto.
+// Usa riskPct del trade contra el tamaño de cuenta ACTUAL para estimar el $
+// arriesgado (1R). Si no hay riskPct guardado, cae a una aproximación con el
+// R:R cargado (ganancia = rr, pérdida = -1) — ver nota larga en el llamador
+// original sobre por qué esto puede mezclar "R real" con "R estimado".
+export function tradeRMultiple(trade, accountSize) {
+  const riskPct = parseFloat(trade.riskPct);
+  const riskDollars = accountSize && riskPct ? (accountSize * riskPct) / 100 : null;
+  if (riskDollars && riskDollars > 0) return trade.pnl / riskDollars;
+  return trade.pnl > 0 ? (parseFloat(trade.rr) || 1) : -1;
+}
+
 export function computeAdvancedMetrics(trades, accountSize) {
   const sorted = [...trades].sort((a, b) => a.date.localeCompare(b.date) || (a.id || 0) - (b.id || 0));
   const size = accountSize || 0;
@@ -364,12 +379,7 @@ export function computeAdvancedMetrics(trades, accountSize) {
   // R-múltiplos por trade: usa riskPct del trade (o el % de la cuenta arriesgado)
   // contra el tamaño de cuenta actual para estimar el $ arriesgado (1R). Si no hay
   // riskPct guardado, usa el R:R cargado como aproximación (ganancia = rr, pérdida = -1).
-  const rMultiples = sorted.map(t => {
-    const riskPct = parseFloat(t.riskPct);
-    const riskDollars = size && riskPct ? (size * riskPct) / 100 : null;
-    if (riskDollars && riskDollars > 0) return t.pnl / riskDollars;
-    return t.pnl > 0 ? (parseFloat(t.rr) || 1) : -1;
-  });
+  const rMultiples = sorted.map(t => tradeRMultiple(t, size));
 
   const wins = sorted.filter(t => isWinPnl(t.pnl));
   const losses = sorted.filter(t => isLossPnl(t.pnl));
@@ -463,6 +473,43 @@ export function computeAdvancedMetrics(trades, accountSize) {
     profitFactor, sharpe, sortino, totalReturnPct, count: sorted.length,
     recoveryFactor, calmarRatio, kellyPct, computeRiskOfRuin,
   };
+}
+// ─── Correlación emociones × rendimiento ───────────────────────────────────
+// Cada trade puede tener 0, 1 o varias emociones etiquetadas (EmotionSelector
+// es multi-select) — un trade con ["fomo","impatient"] suma a las estadísticas
+// de AMBAS emociones, no se reparte entre ellas. Esto es intencional: "estaba
+// impaciente Y sentí FOMO en este trade" son dos señales independientes, no
+// una fracción de cada una.
+//
+// Importante: el color/orden con el que se muestre el resultado NO debe
+// asumirse a partir de si la emoción está en NEG_EMOTIONS — la lista de
+// constants.js es una etiqueta de intención ("esto suena a mal hábito"), pero
+// el objetivo de este panel es mostrar el resultado REAL medido, que puede
+// sorprender (ej. "FOMO" con winrate alto no sería raro si el trader confunde
+// entrar rápido a un breakout legítimo con FOMO). El llamador decide cómo
+// pintarlo según `avgR`/`pnlTotal`, no según la lista de "negativas".
+export function computeEmotionStats(trades, accountSize) {
+  const withEmotions = trades.filter(t => Array.isArray(t.emotions) && t.emotions.length > 0);
+  const byEmotion = {};
+  withEmotions.forEach(t => {
+    const r = tradeRMultiple(t, accountSize);
+    t.emotions.forEach(emo => {
+      if (!byEmotion[emo]) byEmotion[emo] = { id: emo, trades: [], rSum: 0, pnlSum: 0, wins: 0 };
+      const bucket = byEmotion[emo];
+      bucket.trades.push(t);
+      bucket.rSum += r;
+      bucket.pnlSum += t.pnl;
+      if (isWinPnl(t.pnl)) bucket.wins += 1;
+    });
+  });
+  return Object.values(byEmotion).map(b => ({
+    id: b.id,
+    count: b.trades.length,
+    winRate: b.trades.length ? b.wins / b.trades.length : 0,
+    avgR: b.trades.length ? b.rSum / b.trades.length : 0,
+    pnlTotal: b.pnlSum,
+    pnlAvg: b.trades.length ? b.pnlSum / b.trades.length : 0,
+  })).sort((a, b) => b.avgR - a.avgR);
 }
 // ─── Playbook Scoring (adherencia a la estrategia) ────────────────────────────
 // Convierte las "razones cumplidas" (checklist) de cada trade en un puntaje de
