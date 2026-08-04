@@ -2058,20 +2058,29 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
       {/* ── CALENDAR ── */}
       {tab === "calendar" && (
         <div>
-          {/* Rentabilidad de la inversión: evolución mensual de la cuenta activa */}
-          <div className="hz-card" style={{ ...S.card, padding: "16px 18px", marginBottom: 14 }}>
-            <div style={{ fontSize: FS.base, fontWeight: 800, color: T.text, marginBottom: 2 }}>Rentabilidad de la inversión</div>
-            <div style={{ fontSize: FS.sm, color: T.textMuted, marginBottom: 10 }}>{accountLabel} · histórico completo</div>
-            <ProfitabilityChart trades={trades[account] || []} accountSize={accounts[account]?.size || 0} />
-          </div>
-
-          {/* Gráfica combinada de tendencia mensual */}
-          <div className="hz-card" style={{ ...S.card, padding: "16px 18px", marginBottom: 14 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-              <span style={{ ...S.tag(T.brand), display: "inline-flex", alignItems: "center", gap: 4 }}><TrendingUp size={10} />MoM</span>
-              <span style={{ fontSize: FS.base, fontWeight: 700, color: T.text }}>Tendencia por instrumento — {MONTHS_FULL[viewMonth]} {viewYear}</span>
+          {/* Antes: dos cards apiladas full-width (cada una con su propio
+              gráfico), lo que empujaba el calendario muy abajo y obligaba a
+              scrollear para verlo. Ahora van lado a lado en una fila, igual
+              que las 4 métricas del Dashboard — mismo patrón de grid
+              (auto-fit + minmax) que ya se usa en otras partes de la app,
+              así en ventanas angostas se acomodan en 1 columna en vez de
+              aplastarse en vez de romper el layout. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14, marginBottom: 14 }}>
+            {/* Rentabilidad de la inversión: evolución mensual de la cuenta activa */}
+            <div className="hz-card" style={{ ...S.card, padding: "16px 18px" }}>
+              <div style={{ fontSize: FS.base, fontWeight: 800, color: T.text, marginBottom: 2 }}>Rentabilidad de la inversión</div>
+              <div style={{ fontSize: FS.sm, color: T.textMuted, marginBottom: 10 }}>{accountLabel} · histórico completo</div>
+              <ProfitabilityChart trades={trades[account] || []} accountSize={accounts[account]?.size || 0} />
             </div>
-            <MonthlyTrendChart trades={currentTrades} year={viewYear} month={viewMonth} accentColor={accentColor} />
+
+            {/* Gráfica combinada de tendencia mensual */}
+            <div className="hz-card" style={{ ...S.card, padding: "16px 18px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span style={{ ...S.tag(T.brand), display: "inline-flex", alignItems: "center", gap: 4 }}><TrendingUp size={10} />MoM</span>
+                <span style={{ fontSize: FS.base, fontWeight: 700, color: T.text }}>Tendencia por instrumento — {MONTHS_FULL[viewMonth]} {viewYear}</span>
+              </div>
+              <MonthlyTrendChart trades={currentTrades} year={viewYear} month={viewMonth} accentColor={accentColor} />
+            </div>
           </div>
 
           <div className="hz-card" style={{ ...S.card, overflow: "hidden" }}>
