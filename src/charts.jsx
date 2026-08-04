@@ -504,7 +504,7 @@ export function ProfitabilityChart({ trades, accountSize }) {
 
   const toggleBtn = (key, label) => (
     <button onClick={() => setMode(key)}
-      style={{ padding: "6px 14px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: FS.sm, fontWeight: 700, background: mode === key ? T.brandSoft : "transparent", color: mode === key ? T.brand : T.textMuted }}>
+      style={{ padding: "4px 10px", borderRadius: 7, border: "none", cursor: "pointer", fontSize: FS.xs, fontWeight: 700, background: mode === key ? T.brandSoft : "transparent", color: mode === key ? T.brand : T.textMuted }}>
       {label}
     </button>
   );

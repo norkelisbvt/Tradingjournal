@@ -289,7 +289,6 @@ const StatisticsView = memo(function StatisticsView({ allTrades, accentColor, se
         </button>
       </div>
       <AdvancedMetricsPanel trades={baseTrades} accentColor={accentColor} accountSize={accountSize} themeMode={themeMode} />
-      <PlaybookAdherencePanel trades={baseTrades} accentColor={accentColor} themeMode={themeMode} />
 
       {/* Bar chart */}
       <div className="hz-card" style={{ ...S.card, padding: 20, marginBottom: 14 }}>
@@ -392,37 +391,46 @@ const StatisticsView = memo(function StatisticsView({ allTrades, accentColor, se
       )}
 
 
-      {baseTrades.length > 0 && (
-        <div className="hz-card" style={{ ...S.card, padding: 20, marginBottom: 14 }}>
-          <div style={{ fontWeight: 700, fontSize: FS.base, color: T.text, marginBottom: 2 }}>Rendimiento por día de la semana</div>
-          <div style={{ fontSize: FS.sm, color: T.textMuted, marginBottom: 16 }}>Todo el historial filtrado · {baseTrades.length} trades</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
-            {weekdayStats.map(d => {
-              const wr = d.count ? ((d.wins / d.count) * 100).toFixed(0) : "0";
-              const color = d.pnl >= 0 ? T.gain : T.loss;
-              return (
-                <div key={d.label} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: FS.xs, fontWeight: 700, color: T.textMuted, marginBottom: 6 }}>{d.label}</div>
-                  <div style={{ height: 70, display: "flex", alignItems: "flex-end", justifyContent: "center", marginBottom: 6 }}>
-                    <div style={{
-                      width: "70%",
-                      height: d.count ? `${Math.max(8, Math.min(100, (Math.abs(d.pnl) / (Math.max(...weekdayStats.map(x => Math.abs(x.pnl)), 1))) * 100))}%` : 4,
-                      background: d.count ? color : T.border,
-                      borderRadius: 4,
-                    }} />
+      {/* Playbook Score y Rendimiento por día van lado a lado — ninguno de
+          los dos necesita el ancho completo (uno es básicamente un número +
+          una franja de barras chica, el otro son 7 columnas angostas), así
+          que juntos ocupan una sola fila en vez de dos, igual que en Trades. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: 14, marginBottom: 14 }}>
+        <PlaybookAdherencePanel trades={baseTrades} accentColor={accentColor} themeMode={themeMode} />
+
+        {baseTrades.length > 0 && (
+          <div className="hz-card" style={{ ...S.card, padding: 20 }}>
+            <div style={{ fontWeight: 700, fontSize: FS.base, color: T.text, marginBottom: 2 }}>Rendimiento por día de la semana</div>
+            <div style={{ fontSize: FS.sm, color: T.textMuted, marginBottom: 16 }}>Todo el historial filtrado · {baseTrades.length} trades</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 8 }}>
+              {weekdayStats.map(d => {
+                const wr = d.count ? ((d.wins / d.count) * 100).toFixed(0) : "0";
+                const color = d.pnl >= 0 ? T.gain : T.loss;
+                return (
+                  <div key={d.label} style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: FS.xs, fontWeight: 700, color: T.textMuted, marginBottom: 6 }}>{d.label}</div>
+                    <div style={{ height: 70, display: "flex", alignItems: "flex-end", justifyContent: "center", marginBottom: 6 }}>
+                      <div style={{
+                        width: "70%",
+                        height: d.count ? `${Math.max(8, Math.min(100, (Math.abs(d.pnl) / (Math.max(...weekdayStats.map(x => Math.abs(x.pnl)), 1))) * 100))}%` : 4,
+                        background: d.count ? color : T.border,
+                        borderRadius: 4,
+                      }} />
+                    </div>
+                    <div style={{ fontSize: FS.xs, fontWeight: 700, color: d.count ? color : T.textFaint }}>
+                      {d.count ? money(d.pnl, 0) : "—"}
+                    </div>
+                    <div style={{ fontSize: FS.xs, color: T.textFaint }}>{d.count} trades{d.count ? ` · ${wr}%` : ""}</div>
                   </div>
-                  <div style={{ fontSize: FS.xs, fontWeight: 700, color: d.count ? color : T.textFaint }}>
-                    {d.count ? money(d.pnl, 0) : "—"}
-                  </div>
-                  <div style={{ fontSize: FS.xs, color: T.textFaint }}>{d.count} trades{d.count ? ` · ${wr}%` : ""}</div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {baseTrades.length > 0 && <DayHourHeatmap trades={baseTrades} />}
+
 
       {selectedMonth && monthTrades.length > 0 && (() => {
         const [y, mo] = selectedMonth.split("-");
