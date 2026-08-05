@@ -37,7 +37,7 @@ export async function fetchAllTradingData() {
   };
 }
 
-function rowToAccount(row) {
+export function rowToAccount(row) {
   return {
     id: row.id,
     localKey: row.local_key,
@@ -53,13 +53,15 @@ function rowToAccount(row) {
   };
 }
 
-function rowToTrade(row) {
+export function rowToTrade(row) {
   return {
     id: row.id,
     accountId: row.account_id,
     date: row.fecha,
     time: row.hora ?? undefined,
+    exitTime: row.hora_salida ?? undefined,
     exitDate: row.fecha_salida ?? undefined,
+    exitTime: row.hora_salida ?? undefined,
     instrument: row.instrumento,
     direction: row.direccion ?? undefined,
     session: row.sesion ?? undefined,
@@ -119,7 +121,7 @@ export async function deleteAccount(id) {
 // como e.target.value) — por eso se parsean acá antes de mandarlos a una
 // columna numeric. Number("") da NaN, no 0, así que se cae a null en ese
 // caso (campo vacío = sin dato, no cero).
-function numOrNull(v) {
+export function numOrNull(v) {
   if (v === "" || v === null || v === undefined) return null;
   const n = Number(v);
   return Number.isNaN(n) ? null : n;
@@ -133,7 +135,9 @@ export async function upsertTrade(trade) {
     account_id: trade.accountId ?? null,
     fecha: trade.date,
     hora: trade.time || null,
+    hora_salida: trade.exitTime || null,
     fecha_salida: trade.exitDate || null,
+    hora_salida: trade.exitTime || null,
     instrumento: trade.instrument,
     direccion: trade.direction ?? null,
     sesion: trade.session ?? null,
