@@ -9,39 +9,7 @@ import { DateRangeFilter } from "../filters/DateRangeFilter";
 import { InstrumentFilter } from "../filters/InstrumentFilter";
 import { AdvancedMetricsPanel } from "./AdvancedMetricsPanel";
 import { PlaybookAdherencePanel } from "./PlaybookAdherencePanel";
-
-// Mismo hook de tween que usa TradingJournalInner.jsx para las cifras
-// grandes del dashboard (duplicado acá porque este componente vive en su
-// propio archivo): al cambiar el mes seleccionado, el P&L del header
-// interpola desde el valor anterior en vez de saltar de golpe.
-function useAnimatedNumber(target, duration = 450) {
-  const [display, setDisplay] = useState(target);
-  const valueRef = useRef(target);
-  const rafRef = useRef(null);
-  useEffect(() => {
-    const reduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    if (reduceMotion) {
-      valueRef.current = target;
-      setDisplay(target);
-      return;
-    }
-    const from = valueRef.current;
-    if (from === target) return;
-    cancelAnimationFrame(rafRef.current);
-    const start = performance.now();
-    function tick(now) {
-      const p = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - p, 3);
-      const val = from + (target - from) * eased;
-      valueRef.current = val;
-      setDisplay(val);
-      if (p < 1) rafRef.current = requestAnimationFrame(tick);
-    }
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [target, duration]);
-  return display;
-}
+import { useAnimatedNumber } from "../../hooks/useAnimatedNumber";
 
 // themeMode se recibe como prop únicamente para que React.memo detecte el
 // cambio de tema y vuelva a renderizar este componente: T/S se leen del

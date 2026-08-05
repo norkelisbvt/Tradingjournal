@@ -4,6 +4,7 @@ import jsPDF from "jspdf";
 import { Crown, LayoutDashboard, CalendarDays, ListChecks, LineChart as LineChartIcon, BarChart3, Image as ImageIcon, Plus, History, Sun, Moon, Lock, MoreVertical, Save, RotateCcw, KeyRound, Pencil, Trash2, FileText, Check, X, GitCompare, Brain, Globe, ArrowLeftRight, ArrowUpDown, Target, Ruler, DollarSign, Percent, Wallet, TrendingUp, TrendingDown, AlertTriangle, AlertOctagon, Bell, ArrowUpRight, SlidersHorizontal, Type, Hash, Tag, ChevronLeft, ChevronRight, Home, UtensilsCrossed, Car, HeartPulse, Gamepad2, Repeat, MoreHorizontal, Briefcase, Laptop, Gift } from "lucide-react";
 import { T, IS_DARK, applyTheme, FS, RADIUS, UI_FONT, GoogleFontImport, numMonoStyle, S, EASE, Z } from "./theme";
 import { useFocusTrap } from "./hooks/useFocusTrap";
+import { useAnimatedNumber } from "./hooks/useAnimatedNumber";
 import { INSTRUMENTS, INST_COLOR, DEFAULT_INSTRUMENT_SPECS, MONTHS_SHORT, MONTHS_FULL, YEARS, BACKTEST_YEARS, ACCOUNT_META, TAB_KEY_ORDER, DEFAULT_REASONS, EMOTIONS, EMPTY_FORM, DEMO_TRADES, DEFAULT_ERRORS, NEG_EMOTIONS, DEFAULT_ROUTINE_ITEMS, DEFAULT_ACCOUNTS, DEFAULT_ACCOUNT_ORDER } from "./constants";
 import { instLabel, instEmoji, groupOf, resolveDateRange, getDaysInMonth, getFirstDay, money, pctFmt, accountAccent, toISODate, startOfWeekDate, getTradeSetups, svgToPngDataUrl, downloadTextFile, exportTradesToCSV, migrateAccountsData, hasSeenOnboarding, markOnboardingSeen } from "./utils";
 import { WinRateDonut, ProfitabilityChart, MonthlyTrendChart, PnLChart, InteractiveCurveChart, CategoryBreakdownDonut } from "./charts";
@@ -74,35 +75,6 @@ import { useCloudSync, newId } from "./cloud/cloudSync";
 // número vuelve a cambiar a mitad de la animación (cuenta/mes clickeado
 // rápido), el próximo tween arranque desde donde el ojo lo dejó, no desde
 // el valor final de la animación interrumpida.
-function useAnimatedNumber(target, duration = 450) {
-  const [display, setDisplay] = useState(target);
-  const valueRef = useRef(target);
-  const rafRef = useRef(null);
-  useEffect(() => {
-    const reduceMotion = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-    if (reduceMotion) {
-      valueRef.current = target;
-      setDisplay(target);
-      return;
-    }
-    const from = valueRef.current;
-    if (from === target) return;
-    cancelAnimationFrame(rafRef.current);
-    const start = performance.now();
-    function tick(now) {
-      const p = Math.min(1, (now - start) / duration);
-      const eased = 1 - Math.pow(1 - p, 3);
-      const val = from + (target - from) * eased;
-      valueRef.current = val;
-      setDisplay(val);
-      if (p < 1) rafRef.current = requestAnimationFrame(tick);
-    }
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [target, duration]);
-  return display;
-}
-
 // Versión del "esquema" del payload que se guarda/respalda (trades, cuentas,
 // listas de setup/error, etc.). No existía un número explícito acá: cada
 // migración nueva se resolvía a mano con "if (saved.campoNuevo)" en el efecto

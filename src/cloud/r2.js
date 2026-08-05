@@ -8,6 +8,7 @@
 // siempre del lado del servidor.
 // ════════════════════════════════════════════════════════════════════
 import { supabase } from "./supabaseClient";
+import { resizeImageToCanvas } from "../utils";
 
 const MAX_DIMENSION = 1600; // ancho/alto máximo tras el resize, de sobra para revisar un chart
 const WEBP_QUALITY = 0.82;
@@ -24,13 +25,7 @@ const ALLOWED_UPLOAD_TYPES = new Set(["image/webp", "image/png", "image/jpeg"]);
  * no un valor fijo, porque no siempre es WebP (ver fallback abajo).
  */
 async function compressImage(file) {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, MAX_DIMENSION / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  const canvas = await resizeImageToCanvas(file, MAX_DIMENSION);
 
   const toBlob = (type, quality) => new Promise(resolve => canvas.toBlob(resolve, type, quality));
 

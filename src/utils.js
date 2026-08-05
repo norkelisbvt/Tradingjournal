@@ -228,38 +228,45 @@ export function fileToBase64(file) {
 // Comprime una imagen: la redimensiona (máx. 1600px de lado más largo) y la
 // convierte a JPG con calidad 80% — reduce mucho el peso sin perder detalle
 // visual relevante para revisar un gráfico de trading.
-export function compressImage(file, { maxDim = 1600, quality = 0.8 } = {}) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = () => {
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > maxDim || height > maxDim) {
-          if (width >= height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        // Fondo blanco (por si el PNG original tenía transparencia, evita bordes negros en JPG)
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, width, height);
-        ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", quality));
-      };
-      img.onerror = reject;
-      img.src = reader.result;
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
+// Redimensiona un archivo de imagen a un <canvas>, preservando el aspect
+// ratio — sin decidir todavía formato ni calidad de salida, eso lo define
+// cada consumidor según su necesidad (compressImage de acá abajo guarda
+// localmente como data URL JPEG liviana; cloud/r2.js sube a R2 priorizando
+// WebP). Antes este cálculo estaba duplicado en los dos archivos con
+// pequeñas diferencias que podían desincronizarse con el tiempo.
+export async function resizeImageToCanvas(file, maxDim = 1600) {
+  let width, height, drawSource;
+  if (typeof createImageBitmap === "function") {
+    // Más rápido y sin los callbacks onload/onerror de Image — se usa
+    // cuando el entorno lo soporta (todos los navegadores modernos).
+    const bitmap = await createImageBitmap(file);
+    width = bitmap.width; height = bitmap.height; drawSource = bitmap;
+  } else {
+    // Fallback para entornos sin createImageBitmap.
+    drawSource = await new Promise((resolve, reject) => {
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = () => { img.onload = () => resolve(img); img.onerror = reject; img.src = reader.result; };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    width = drawSource.width; height = drawSource.height;
+  }
+  const scale = Math.min(1, maxDim / Math.max(width, height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  const ctx = canvas.getContext("2d");
+  // Fondo blanco (por si el original tenía transparencia, evita bordes negros en JPG)
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(drawSource, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+export async function compressImage(file, { maxDim = 1600, quality = 0.8 } = {}) {
+  const canvas = await resizeImageToCanvas(file, maxDim);
+  return canvas.toDataURL("image/jpeg", quality);
 }
 // Descarga cualquier contenido de texto como archivo (CSV, JSON, etc.)
 // Convierte un elemento <svg> del DOM a una imagen PNG (data URL), para poder
@@ -510,6 +517,70 @@ export function computeEmotionStats(trades, accountSize) {
     pnlTotal: b.pnlSum,
     pnlAvg: b.trades.length ? b.pnlSum / b.trades.length : 0,
   })).sort((a, b) => b.avgR - a.avgR);
+}
+// ─── Hold Time: duración real del trade × resultado ────────────────────────
+// Requiere hora de ENTRADA y hora de SALIDA cargadas (form.time / form.exitTime)
+// — sin ambas no hay forma de calcular una duración real. No se aproxima con
+// "diferencia en días" como fallback: para un trade intradía eso da 0 días
+// siempre, un dato inútil que ensuciaría el promedio en vez de aportar algo.
+// Los trades sin ambos horarios simplemente no entran al cálculo.
+const HOLD_BUCKETS = [
+  { id: "scalp", label: "< 15 min", max: 15 },
+  { id: "short", label: "15-60 min", max: 60 },
+  { id: "medium", label: "1-4 h", max: 240 },
+  { id: "long", label: "4-24 h", max: 1440 },
+  { id: "swing", label: "> 1 día", max: Infinity },
+];
+
+function holdMinutes(trade) {
+  if (!trade.date || !trade.time || !trade.exitTime) return null;
+  const entryMs = new Date(`${trade.date}T${trade.time}:00`).getTime();
+  const exitMs = new Date(`${trade.exitDate || trade.date}T${trade.exitTime}:00`).getTime();
+  if (Number.isNaN(entryMs) || Number.isNaN(exitMs)) return null;
+  const diffMin = (exitMs - entryMs) / 60000;
+  return diffMin >= 0 ? diffMin : null; // salida antes que entrada = dato cargado mal, se descarta
+}
+
+/** "95" -> "1h 35m", "20" -> "20m", "1500" -> "1d 1h" */
+export function formatDuration(totalMinutes) {
+  const min = Math.round(totalMinutes);
+  if (min < 60) return `${min}m`;
+  const hours = Math.floor(min / 60);
+  const rem = min % 60;
+  if (hours < 24) return rem ? `${hours}h ${rem}m` : `${hours}h`;
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return remHours ? `${days}d ${remHours}h` : `${days}d`;
+}
+
+export function computeHoldTimeStats(trades, accountSize) {
+  const withDuration = trades.map(t => ({ t, min: holdMinutes(t) })).filter(x => x.min != null);
+  if (withDuration.length === 0) return null;
+
+  const wins = withDuration.filter(x => isWinPnl(x.t.pnl));
+  const losses = withDuration.filter(x => isLossPnl(x.t.pnl));
+  const avg = arr => (arr.length ? arr.reduce((s, x) => s + x.min, 0) / arr.length : null);
+
+  const buckets = HOLD_BUCKETS.map((b, i) => {
+    const min = i === 0 ? 0 : HOLD_BUCKETS[i - 1].max;
+    const inBucket = withDuration.filter(x => x.min >= min && x.min < b.max);
+    const bWins = inBucket.filter(x => isWinPnl(x.t.pnl));
+    return {
+      id: b.id,
+      label: b.label,
+      count: inBucket.length,
+      winRate: inBucket.length ? bWins.length / inBucket.length : 0,
+      avgR: inBucket.length ? inBucket.reduce((s, x) => s + tradeRMultiple(x.t, accountSize), 0) / inBucket.length : 0,
+    };
+  }).filter(b => b.count > 0);
+
+  return {
+    coveredCount: withDuration.length,
+    totalCount: trades.length,
+    avgMinutesWin: avg(wins),
+    avgMinutesLoss: avg(losses),
+    buckets,
+  };
 }
 // ─── Playbook Scoring (adherencia a la estrategia) ────────────────────────────
 // Convierte las "razones cumplidas" (checklist) de cada trade en un puntaje de
