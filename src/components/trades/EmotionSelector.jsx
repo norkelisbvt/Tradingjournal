@@ -1,7 +1,7 @@
 // Generado por refactor automático a partir de TradingJournal.jsx original (revisar antes de usar en producción).
 import { memo } from "react";
 import { T, FS, S } from "../../theme";
-import { EMOTIONS } from "../../constants";
+import { EMOTIONS, NEG_EMOTIONS } from "../../constants";
 
 const EmotionSelector = memo(function EmotionSelector({ selected, onChange }) {
   function toggle(id) { onChange(selected.includes(id) ? selected.filter(e => e !== id) : [...selected, id]); }
@@ -15,7 +15,7 @@ const EmotionSelector = memo(function EmotionSelector({ selected, onChange }) {
       <div role="group" aria-labelledby="emotion-selector-label" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {EMOTIONS.map(e => {
           const active = selected.includes(e.id);
-          const isNeg = ["fomo","revenge","fear","greedy","impatient","tired","stressed"].includes(e.id);
+          const isNeg = NEG_EMOTIONS.includes(e.id);
           const color = active ? (isNeg ? T.loss : T.gain) : T.textMuted;
           return (
             <button key={e.id} type="button" onClick={() => toggle(e.id)} aria-pressed={active}

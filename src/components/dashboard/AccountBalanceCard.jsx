@@ -27,14 +27,14 @@ const AccountBalanceCard = memo(function AccountBalanceCard({ account, group, ac
   const pct = acc.size > 0 ? ((pnlTotal / acc.size) * 100).toFixed(2) : "0.00";
 
   return (
-    <div style={{ marginBottom: 16 }}>
-      <div className="hz-card" style={{ ...S.card, padding: 16, position: "relative", overflow: "hidden", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+    <div style={{ marginBottom: 14 }}>
+      <div className="hz-card" style={{ ...S.card, padding: 14, position: "relative", overflow: "hidden", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${color}, ${color}00)` }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 34, height: 34, borderRadius: 9, background: color + "15", color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: FS.lg, flexShrink: 0 }}>
-              {group === "personal" ? <Wallet size={16} /> : group === "funded" ? <ShieldCheck size={16} /> : <TrendingUp size={16} />}
+            <div style={{ width: 30, height: 30, borderRadius: 8, background: color + "15", color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: FS.lg, flexShrink: 0 }}>
+              {group === "personal" ? <Wallet size={15} /> : group === "funded" ? <ShieldCheck size={15} /> : <TrendingUp size={15} />}
             </div>
             <div>
               <div style={{ fontSize: FS.base, fontWeight: 700, color: T.text }}>{label}</div>
@@ -115,28 +115,39 @@ const AccountBalanceCard = memo(function AccountBalanceCard({ account, group, ac
           </div>
         ) : (
           <>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: acc.riskPct ? 8 : 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: FS.sm, color: T.textMuted, fontWeight: 600 }}>Balance</span>
-                <span style={{ ...numMonoStyle, fontSize: FS.xl, fontWeight: 800, color: T.text, letterSpacing: "-0.02em" }}>{money(balanceWithPnL)}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: FS.sm, color: T.textMuted, fontWeight: 600 }}>Profit $</span>
-                <span style={{ ...numMonoStyle, fontSize: FS.base, fontWeight: 700, color: pnlTotal >= 0 ? T.gain : T.loss }}>{money(pnlTotal)}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                <span style={{ fontSize: FS.sm, color: T.textMuted, fontWeight: 600 }}>Profit %</span>
-                <span style={{ ...numMonoStyle, fontSize: FS.base, fontWeight: 700, color: pnlTotal >= 0 ? T.gain : T.loss }}>{pnlTotal >= 0 ? "+" : ""}{pct}%</span>
-              </div>
+            {/* Antes: 3 filas apiladas (Balance / Profit $ / Profit %), cada
+                una a ancho completo — mucha altura para poca información.
+                Ahora: el balance es el número protagonista (grande, una sola
+                vez) y el profit $/% va al lado como un chip compacto, mismo
+                lenguaje visual que las métricas del resto del Dashboard. */}
+            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: acc.riskPct ? 6 : 0 }}>
+              <span style={{ ...numMonoStyle, fontSize: FS.xl, fontWeight: 800, color: T.text, letterSpacing: "-0.02em" }}>{money(balanceWithPnL)}</span>
+              <span style={{
+                ...numMonoStyle, fontSize: FS.sm, fontWeight: 700,
+                color: pnlTotal >= 0 ? T.gain : T.loss,
+                background: (pnlTotal >= 0 ? T.gain : T.loss) + "15",
+                borderRadius: 6, padding: "2px 7px",
+              }}>
+                {pnlTotal >= 0 ? "+" : ""}{money(pnlTotal)} · {pnlTotal >= 0 ? "+" : ""}{pct}%
+              </span>
             </div>
             {acc.riskPct && (
               <div style={{ fontSize: FS.xs, color: T.textMuted }}>
                 Riesgo máx. <span style={{ fontWeight: 700, color }}>{acc.riskPct}%</span> · {money((acc.size * parseFloat(acc.riskPct)) / 100)} por trade
               </div>
             )}
-            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 10 }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.gain, display: "inline-block" }} />
-              <span style={{ fontSize: FS.sm, color: T.gain, fontWeight: 700 }}>Live</span>
+            <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 8 }}>
+              {group === "backtest" ? (
+                <>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.textFaint, display: "inline-block" }} />
+                  <span style={{ fontSize: FS.xs, color: T.textFaint, fontWeight: 700 }}>Simulado</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: T.gain, display: "inline-block" }} />
+                  <span style={{ fontSize: FS.xs, color: T.gain, fontWeight: 700 }}>Live</span>
+                </>
+              )}
             </div>
           </>
         )}
