@@ -863,63 +863,6 @@ export function PnLChart({ monthTrades }) {
   );
 }
 
-// Correlación entre las emociones registradas y el P&L: barras de progreso
-// simples (HTML/CSS, no un gráfico SVG con ejes/escalas), se mantienen igual.
-export function EmotionCorrelationChart({ trades, accentColor }) {
-  const data = useMemo(() => {
-    const map = {};
-    EMOTIONS.forEach(e => { map[e.id] = { ...e, count: 0, pnl: 0, wins: 0 }; });
-    trades.forEach(t => {
-      (t.emotions || []).forEach(eid => {
-        if (!map[eid]) return;
-        map[eid].count += 1;
-        map[eid].pnl += t.pnl;
-        if (t.pnl > 0) map[eid].wins += 1;
-      });
-    });
-    return Object.values(map)
-      .filter(e => e.count > 0)
-      .map(e => ({ ...e, avgPnl: e.pnl / e.count, wr: (e.wins / e.count) * 100 }))
-      .sort((a, b) => b.avgPnl - a.avgPnl);
-  }, [trades]);
-
-  if (!data.length) {
-    return (
-      <div style={{ ...S.card, padding: 18, marginBottom: 14, textAlign: "center", color: T.textFaint, fontSize: FS.base }}>
-        Etiquetá emociones en tus trades para ver aquí su correlación con el P&L.
-      </div>
-    );
-  }
-  const maxAbs = Math.max(...data.map(d => Math.abs(d.avgPnl)), 1);
-
-  return (
-    <div style={{ ...S.card, padding: 18, marginBottom: 14 }}>
-      <div style={{ fontWeight: 700, fontSize: FS.base, color: T.text, marginBottom: 2 }}>😌 Emociones vs P&L</div>
-      <div style={{ fontSize: FS.sm, color: T.textMuted, marginBottom: 14 }}>P&L promedio por trade según el estado emocional registrado</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-        {data.map(e => {
-          const pct = Math.max((Math.abs(e.avgPnl) / maxAbs) * 100, 2);
-          const positive = e.avgPnl >= 0;
-          return (
-            <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 132, fontSize: FS.base, color: NEG_EMOTIONS.includes(e.id) ? T.loss : T.textMuted, display: "flex", alignItems: "center", gap: 5, flexShrink: 0 }}>
-                <span>{e.emoji}</span><span>{e.label}</span>
-              </div>
-              <div style={{ flex: 1, height: 16, background: T.surfaceAlt, borderRadius: 4, position: "relative", overflow: "hidden" }}>
-                <div className="hz-bar-grow-x" style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: `${pct}%`, background: positive ? T.gain : T.loss, borderRadius: 4, transition: "width 0.2s" }} />
-              </div>
-              <div style={{ width: 85, textAlign: "right", fontSize: FS.base, fontWeight: 700, color: positive ? T.gain : T.loss, flexShrink: 0 }}>
-                {money(e.avgPnl, 0)}
-              </div>
-              <div style={{ width: 78, textAlign: "right", fontSize: FS.xs, color: T.textFaint, flexShrink: 0 }}>{e.count} trades · {e.wr.toFixed(0)}% WR</div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // Mini-gráfica de hábitos: barras con el % de actividades completadas por día,
 // para los últimos N días, ahora con <Bar> de @visx/shape sobre una escala lineal.
 export function HabitMiniChart({ data, accentColor, days = 21 }) {

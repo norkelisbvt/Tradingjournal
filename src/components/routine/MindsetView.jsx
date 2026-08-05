@@ -4,7 +4,7 @@ import { Pencil, Trash2, Brain } from "lucide-react";
 import { T, FS, S } from "../../theme";
 import { EMOTIONS } from "../../constants";
 import { toISODate } from "../../utils";
-import { EmotionCorrelationChart, HabitMiniChart } from "../../charts";
+import { HabitMiniChart } from "../../charts";
 import { ConfirmDialog } from "../common/ConfirmDialog";
 import { EmptyState } from "../common/EmptyState";
 import { UndoToast } from "../common/UndoToast";
@@ -56,8 +56,10 @@ const MindsetView = memo(function MindsetView({ trades, accentColor, entries, se
 
   return (
     <div>
-      {/* Estadísticas de emociones */}
-      <EmotionCorrelationChart trades={trades} accentColor={accentColor} />
+      {/* La correlación emociones × rendimiento ahora vive en el tab de
+          Trades (usa R-múltiplo normalizado por riesgo, más comparable
+          entre trades de distinto tamaño que el P&L promedio en $ que
+          mostraba esta vista antes) — ver EmotionCorrelationPanel. */}
 
       {/* Trading Routine: rutina diaria de hábitos + mini-gráfica acumulada */}
       <TradingRoutineTable data={routineData} setData={setRoutineData} accentColor={accentColor} />
