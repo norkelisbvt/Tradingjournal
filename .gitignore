@@ -36,6 +36,12 @@ npm-debug.log*
 # ── Vitest / coverage ──
 coverage/
 
-trading-journal*.zip
+*storybook.log
+storybook-static
 
-supabase/.temp/
+# ── Playwright (regresión visual) ──
+# playwright-report/ y test-results/ son output temporal de cada corrida.
+# tests/visual/**/*-snapshots/ NO se ignora: esas capturas SON la base de
+# comparación (el "resultado esperado") y tienen que quedar versionadas.
+playwright-report/
+test-results/

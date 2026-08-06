@@ -8,7 +8,11 @@
     "test": "vitest run",
     "build": "vite build",
     "electron:dev": "concurrently -k \"vite\" \"wait-on tcp:5173 && electron .\"",
-    "electron:build": "vite build && electron-builder"
+    "electron:build": "vite build && electron-builder",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build",
+    "test:visual": "npm run build-storybook && playwright test",
+    "test:visual:update": "npm run build-storybook && playwright test --update-snapshots"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",
@@ -26,11 +30,24 @@
     "recharts": "^3.10.0"
   },
   "devDependencies": {
+    "@chromatic-com/storybook": "^5.2.1",
+    "@playwright/test": "^1.62.1",
+    "@storybook/addon-a11y": "^10.5.6",
+    "@storybook/addon-docs": "^10.5.6",
+    "@storybook/addon-mcp": "^0.7.0",
+    "@storybook/addon-vitest": "^10.5.6",
+    "@storybook/react-vite": "^10.5.6",
     "@vitejs/plugin-react": "^4.3.1",
+    "@vitest/browser-playwright": "4.1.10",
+    "@vitest/coverage-v8": "4.1.10",
     "concurrently": "^8.2.2",
     "electron": "^31.0.0",
     "electron-builder": "^24.13.3",
+    "http-server": "^14.1.1",
     "jsdom": "^30.0.0",
+    "playwright": "^1.62.1",
+    "prop-types": "^15.8.1",
+    "storybook": "^10.5.6",
     "supabase": "^2.111.0",
     "vite": "^5.3.1",
     "vitest": "^4.1.10",
@@ -52,11 +69,6 @@
         "nsis",
         "portable"
       ]
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "norkelisbvt",
-      "repo": "Tradingjournal"
     }
   }
 }
