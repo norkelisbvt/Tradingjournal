@@ -1,0 +1,3 @@
+-- Esta migración quedó vacía por error (nombre de ejemplo sin completar).
+-- No aplica ningún cambio de schema. Se mantiene renombrada para no romper
+-- el historial de migraciones ya registrado en Supabase.
