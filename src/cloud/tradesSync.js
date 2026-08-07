@@ -76,8 +76,11 @@ export function rowToTrade(row) {
     reasons: row.razones || {},
     errors: row.errores || [],
     emotions: row.emociones || [],
+    emotionIntensity: row.emociones_intensidad || {},
     tags: row.tags || [],
     notes: row.notas ?? undefined,
+    reviewWhatWorked: row.revision_bien ?? undefined,
+    reviewWhatToImprove: row.revision_mejorar ?? undefined,
     imagenAntesKey: row.imagen_antes_key,
     imagenDespuesKey: row.imagen_despues_key,
   };
@@ -152,8 +155,11 @@ export async function upsertTrade(trade) {
     razones: trade.reasons ?? {},
     errores: trade.errors ?? [],
     emociones: trade.emotions ?? [],
+    emociones_intensidad: trade.emotionIntensity ?? {},
     tags: trade.tags ?? [],
     notas: trade.notes ?? null,
+    revision_bien: trade.reviewWhatWorked ?? null,
+    revision_mejorar: trade.reviewWhatToImprove ?? null,
     imagen_antes_key: trade.imagenAntesKey ?? null,
     imagen_despues_key: trade.imagenDespuesKey ?? null,
   };

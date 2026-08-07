@@ -501,12 +501,17 @@ export function computeEmotionStats(trades, accountSize) {
   withEmotions.forEach(t => {
     const r = tradeRMultiple(t, accountSize);
     t.emotions.forEach(emo => {
-      if (!byEmotion[emo]) byEmotion[emo] = { id: emo, trades: [], rSum: 0, pnlSum: 0, wins: 0 };
+      if (!byEmotion[emo]) byEmotion[emo] = { id: emo, trades: [], rSum: 0, pnlSum: 0, wins: 0, intensitySum: 0, intensityCount: 0 };
       const bucket = byEmotion[emo];
       bucket.trades.push(t);
       bucket.rSum += r;
       bucket.pnlSum += t.pnl;
       if (isWinPnl(t.pnl)) bucket.wins += 1;
+      // La intensidad es opcional (trades viejos, de antes de esta función,
+      // no la tienen) — se promedia solo sobre los trades que SÍ la
+      // cargaron, en vez de asumir un valor neutro para los que no.
+      const lvl = (t.emotionIntensity || {})[emo];
+      if (lvl != null) { bucket.intensitySum += lvl; bucket.intensityCount += 1; }
     });
   });
   return Object.values(byEmotion).map(b => ({
@@ -516,6 +521,7 @@ export function computeEmotionStats(trades, accountSize) {
     avgR: b.trades.length ? b.rSum / b.trades.length : 0,
     pnlTotal: b.pnlSum,
     pnlAvg: b.trades.length ? b.pnlSum / b.trades.length : 0,
+    avgIntensity: b.intensityCount ? b.intensitySum / b.intensityCount : null,
   })).sort((a, b) => b.avgR - a.avgR);
 }
 // ─── Hold Time: duración real del trade × resultado ────────────────────────

@@ -1,8 +1,8 @@
 // Generado por refactor automático a partir de TradingJournal.jsx original (revisar antes de usar en producción).
 import { memo } from "react";
-import { BarChart3, TrendingUp, TrendingDown, Camera } from "lucide-react";
+import { BarChart3, TrendingUp, TrendingDown, Camera, CheckCircle2, Wrench } from "lucide-react";
 import { T, FS, S } from "../../theme";
-import { EMOTIONS } from "../../constants";
+import { EMOTIONS, NEG_EMOTIONS } from "../../constants";
 import { money, getTradeSetups } from "../../utils";
 import { InstTag } from "../common/InstTag";
 import { useResolvedImage } from "../../lib/imageStore";
@@ -96,8 +96,23 @@ const TradeDetailModal = memo(function TradeDetailModal({ trade, onClose, accent
             <div style={{ fontSize: FS.xs, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", marginBottom: 7 }}>Emociones</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {emotions.map(e => {
-                const isNeg = ["fomo","revenge","fear","greedy","impatient","tired","stressed"].includes(e.id);
-                return <span key={e.id} style={{ padding: "4px 10px", borderRadius: 16, background: isNeg ? "#fee2e2" : "#dcfce7", border: `1px solid ${isNeg ? "#fecaca" : "#bbf7d0"}`, color: isNeg ? T.loss : T.gain, fontSize: FS.base }}>{e.emoji} {e.label}</span>;
+                const isNeg = NEG_EMOTIONS.includes(e.id);
+                const lvl = (trade.emotionIntensity || {})[e.id];
+                const color = isNeg ? T.loss : T.gain;
+                return (
+                  <span key={e.id} style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 16, background: isNeg ? "#fee2e2" : "#dcfce7", border: `1px solid ${isNeg ? "#fecaca" : "#bbf7d0"}`, color, fontSize: FS.base }}>
+                    {e.emoji} {e.label}
+                    {lvl != null && (
+                      // Puntitos de intensidad (solo lectura acá) — llenos
+                      // hasta el nivel guardado, vacíos el resto.
+                      <span style={{ display: "inline-flex", gap: 2, marginLeft: 2 }}>
+                        {[1, 2, 3, 4, 5].map(i => (
+                          <span key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: i <= lvl ? color : "transparent", border: `1px solid ${color}` }} />
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                );
               })}
             </div>
           </div>
@@ -106,6 +121,26 @@ const TradeDetailModal = memo(function TradeDetailModal({ trade, onClose, accent
           <div style={{ background: T.surfaceAlt, borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
             <div style={{ fontSize: FS.xs, color: T.textFaint, fontWeight: 700, textTransform: "uppercase", marginBottom: 5 }}>Notas</div>
             <div style={{ fontSize: FS.base, color: T.textMuted, lineHeight: 1.5 }}>{trade.notes}</div>
+          </div>
+        )}
+        {(trade.reviewWhatWorked || trade.reviewWhatToImprove) && (
+          <div style={{ display: "grid", gridTemplateColumns: trade.reviewWhatWorked && trade.reviewWhatToImprove ? "1fr 1fr" : "1fr", gap: 10, marginBottom: 14 }}>
+            {trade.reviewWhatWorked && (
+              <div style={{ background: `${T.gain}0d`, border: `1px solid ${T.gain}33`, borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: FS.xs, color: T.gain, fontWeight: 700, textTransform: "uppercase", marginBottom: 5 }}>
+                  <CheckCircle2 size={11} />Qué funcionó
+                </div>
+                <div style={{ fontSize: FS.base, color: T.textMuted, lineHeight: 1.5 }}>{trade.reviewWhatWorked}</div>
+              </div>
+            )}
+            {trade.reviewWhatToImprove && (
+              <div style={{ background: "#d9770610", border: "1px solid #d9770633", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: FS.xs, color: "#d97706", fontWeight: 700, textTransform: "uppercase", marginBottom: 5 }}>
+                  <Wrench size={11} />Qué mejorar
+                </div>
+                <div style={{ fontSize: FS.base, color: T.textMuted, lineHeight: 1.5 }}>{trade.reviewWhatToImprove}</div>
+              </div>
+            )}
           </div>
         )}
         <button onClick={onClose} style={{ width: "100%", padding: "10px 0", border: `1px solid ${T.border}`, borderRadius: 8, background: T.surfaceAlt, color: T.textMuted, cursor: "pointer", fontSize: FS.base }}>Cerrar</button>

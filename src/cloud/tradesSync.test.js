@@ -107,6 +107,22 @@ describe("rowToTrade", () => {
     expect(trade.exitTime).toBe("10:15");
   });
 
+  it("mapea emociones_intensidad, revision_bien y revision_mejorar", () => {
+    const row = {
+      id: "t1", account_id: "a1", fecha: "2026-08-01", instrumento: "NAS100",
+      emociones_intensidad: { fomo: 4 }, revision_bien: "Esperé la confirmación", revision_mejorar: "Salir antes",
+    };
+    const trade = rowToTrade(row);
+    expect(trade.emotionIntensity).toEqual({ fomo: 4 });
+    expect(trade.reviewWhatWorked).toBe("Esperé la confirmación");
+    expect(trade.reviewWhatToImprove).toBe("Salir antes");
+  });
+
+  it("emociones_intensidad ausente cae a objeto vacío, no a undefined", () => {
+    const row = { id: "t1", account_id: "a1", fecha: "2026-08-01", instrumento: "NAS100" };
+    expect(rowToTrade(row).emotionIntensity).toEqual({});
+  });
+
   it("campos numéricos en null se mapean a undefined, no a '0' ni 'null'", () => {
     const row = {
       id: "t1", account_id: "a1", fecha: "2026-08-01", instrumento: "NAS100",
@@ -247,6 +263,31 @@ describe("upsertTrade", () => {
     await upsertTrade({ id: "t1", accountId: "acc1", date: "2026-08-01", instrument: "NAS100", time: "09:30", exitTime: "10:15" });
 
     expect(chain.upsert).toHaveBeenCalledWith(expect.objectContaining({ hora: "09:30", hora_salida: "10:15" }));
+  });
+
+  it("manda emociones_intensidad, revision_bien y revision_mejorar al upsert", async () => {
+    const chain = makeChain({ data: { id: "t1", account_id: "acc1", fecha: "2026-08-01", instrumento: "NAS100" }, error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await upsertTrade({
+      id: "t1", accountId: "acc1", date: "2026-08-01", instrument: "NAS100",
+      emotionIntensity: { fomo: 4 }, reviewWhatWorked: "bien", reviewWhatToImprove: "mejor",
+    });
+
+    expect(chain.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      emociones_intensidad: { fomo: 4 }, revision_bien: "bien", revision_mejorar: "mejor",
+    }));
+  });
+
+  it("emotionIntensity/review ausentes caen a default vacío/null, no a undefined", async () => {
+    const chain = makeChain({ data: { id: "t1", account_id: "acc1", fecha: "2026-08-01", instrumento: "NAS100" }, error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await upsertTrade({ id: "t1", accountId: "acc1", date: "2026-08-01", instrument: "NAS100" });
+
+    expect(chain.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      emociones_intensidad: {}, revision_bien: null, revision_mejorar: null,
+    }));
   });
 
   it("propaga el error de Supabase", async () => {

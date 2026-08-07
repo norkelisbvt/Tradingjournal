@@ -33,6 +33,7 @@ import {
   computeAdvancedMetrics, computeCurrentStreak, streakTier, computePlaybookAdherence,
   computeRiskAlerts, migrateAccountsData, money, pctFmt, moneyCompact, validateTradeForm,
   groupOf, toggleInstrument, isWinPnl, isLossPnl, isBEPnl, toISODate,
+  computeHoldTimeStats, formatDuration, computeEmotionStats,
 } from "./utils.js";
 
 // ─── computeAdvancedMetrics ─────────────────────────────────────────────────
@@ -376,5 +377,125 @@ describe("isWinPnl / isLossPnl / isBEPnl (banda de break-even ±$5)", () => {
   it("apenas fuera del límite ya cuenta como ganancia/pérdida", () => {
     expect(isWinPnl(5.01)).toBe(true);
     expect(isLossPnl(-5.01)).toBe(true);
+  });
+});
+
+// ─── formatDuration ──────────────────────────────────────────────────────
+describe("formatDuration", () => {
+  it("minutos puros bajo 1 hora", () => {
+    expect(formatDuration(20)).toBe("20m");
+    expect(formatDuration(59)).toBe("59m");
+  });
+  it("horas exactas sin minutos sueltos", () => {
+    expect(formatDuration(120)).toBe("2h");
+  });
+  it("horas con minutos sueltos", () => {
+    expect(formatDuration(95)).toBe("1h 35m");
+  });
+  it("días exactos sin horas sueltas", () => {
+    expect(formatDuration(1440)).toBe("1d");
+  });
+  it("días con horas sueltas", () => {
+    expect(formatDuration(1500)).toBe("1d 1h");
+  });
+});
+
+// ─── computeHoldTimeStats ────────────────────────────────────────────────
+describe("computeHoldTimeStats", () => {
+  it("devuelve null si ningún trade tiene hora de entrada Y de salida", () => {
+    const trades = [{ date: "2026-08-01", pnl: 100 }, { date: "2026-08-02", time: "09:00", pnl: -50 }];
+    expect(computeHoldTimeStats(trades, 10000)).toBeNull();
+  });
+
+  it("ignora trades sin ambos horarios cargados, pero calcula sobre los que sí los tienen", () => {
+    const trades = [
+      { date: "2026-08-01", time: "09:00", exitTime: "09:20", pnl: 100 }, // 20 min, con horarios
+      { date: "2026-08-02", pnl: -50 }, // sin horarios -> se ignora
+    ];
+    const stats = computeHoldTimeStats(trades, 10000);
+    expect(stats.coveredCount).toBe(1);
+    expect(stats.totalCount).toBe(2);
+  });
+
+  it("calcula la duración correctamente cruzando fecha de entrada y de salida (trade overnight)", () => {
+    const trades = [
+      { date: "2026-08-01", time: "22:00", exitDate: "2026-08-02", exitTime: "02:00", pnl: 100 }, // 4 horas, cruza medianoche
+    ];
+    const stats = computeHoldTimeStats(trades, 10000);
+    // 4 horas = 240 min -> cae en el bucket "4-24 h" (el límite del bucket anterior es < 240)
+    expect(stats.buckets.find(b => b.id === "long").count).toBe(1);
+  });
+
+  it("descarta un trade con hora de salida anterior a la de entrada (dato mal cargado)", () => {
+    const trades = [
+      { date: "2026-08-01", time: "10:00", exitTime: "09:00", pnl: 100 }, // salida "antes" que entrada
+    ];
+    expect(computeHoldTimeStats(trades, 10000)).toBeNull();
+  });
+
+  it("separa la duración promedio de ganadores y perdedores", () => {
+    const trades = [
+      { date: "2026-08-01", time: "09:00", exitTime: "09:10", pnl: 100 },  // 10 min, ganador
+      { date: "2026-08-01", time: "09:00", exitTime: "09:30", pnl: 100 },  // 30 min, ganador
+      { date: "2026-08-01", time: "09:00", exitTime: "11:00", pnl: -50 }, // 120 min, perdedor
+    ];
+    const stats = computeHoldTimeStats(trades, 10000);
+    expect(stats.avgMinutesWin).toBe(20); // (10+30)/2
+    expect(stats.avgMinutesLoss).toBe(120);
+  });
+
+  it("agrupa correctamente en los buckets de duración", () => {
+    const trades = [
+      { date: "2026-08-01", time: "09:00", exitTime: "09:05", pnl: 50 },  // 5 min -> scalp
+      { date: "2026-08-01", time: "09:00", exitTime: "09:45", pnl: 50 },  // 45 min -> short
+      { date: "2026-08-01", time: "09:00", exitTime: "11:00", pnl: 50 },  // 120 min -> medium
+    ];
+    const stats = computeHoldTimeStats(trades, 10000);
+    const byId = Object.fromEntries(stats.buckets.map(b => [b.id, b.count]));
+    expect(byId.scalp).toBe(1);
+    expect(byId.short).toBe(1);
+    expect(byId.medium).toBe(1);
+  });
+});
+
+// ─── computeEmotionStats ────────────────────────────────────────────────────
+describe("computeEmotionStats", () => {
+  it("ignora trades sin emociones cargadas", () => {
+    const trades = [{ date: "2026-08-01", pnl: 100, emotions: [] }];
+    expect(computeEmotionStats(trades, 10000)).toEqual([]);
+  });
+
+  it("un trade con 2 emociones suma a las estadísticas de ambas, no se reparte", () => {
+    const trades = [{ date: "2026-08-01", pnl: 100, rr: "2", emotions: ["fomo", "confident"] }];
+    const stats = computeEmotionStats(trades, 0);
+    expect(stats).toHaveLength(2);
+    expect(stats.find(s => s.id === "fomo").count).toBe(1);
+    expect(stats.find(s => s.id === "confident").count).toBe(1);
+  });
+
+  it("avgIntensity es null si ningún trade de esa emoción cargó intensidad", () => {
+    const trades = [{ date: "2026-08-01", pnl: 100, emotions: ["fomo"] }];
+    expect(computeEmotionStats(trades, 0)[0].avgIntensity).toBeNull();
+  });
+
+  it("avgIntensity promedia solo los trades que SÍ cargaron intensidad para esa emoción", () => {
+    const trades = [
+      { date: "2026-08-01", pnl: 100, emotions: ["fomo"], emotionIntensity: { fomo: 4 } },
+      { date: "2026-08-02", pnl: -50, emotions: ["fomo"], emotionIntensity: { fomo: 2 } },
+      { date: "2026-08-03", pnl: 20, emotions: ["fomo"] }, // sin intensidad cargada
+    ];
+    const stats = computeEmotionStats(trades, 0);
+    expect(stats[0].count).toBe(3);
+    expect(stats[0].avgIntensity).toBe(3); // (4+2)/2, el tercero no cuenta
+  });
+
+  it("ordena de mejor a peor R promedio", () => {
+    const trades = [
+      { date: "2026-08-01", pnl: 500, rr: "3", emotions: ["confident"] },
+      { date: "2026-08-02", pnl: -100, rr: "2", emotions: ["revenge"] },
+    ];
+    const stats = computeEmotionStats(trades, 0);
+    expect(stats[0].id).toBe("confident");
+    expect(stats[1].id).toBe("revenge");
   });
 });

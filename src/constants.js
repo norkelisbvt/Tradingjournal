@@ -65,9 +65,10 @@ export const EMOTIONS = [
   { id: "stressed", label: "Estresado", emoji: "😬" },
 ];
 export const EMPTY_FORM = {
-  date: "", time: "", exitDate: "", instrument: "NAS100", direction: "LONG", session: "New York",
+  date: "", time: "", exitDate: "", exitTime: "", instrument: "NAS100", direction: "LONG", session: "New York",
   entry: "", exit: "", stopLoss: "", size: "", rr: "", riskPct: "", pnl: "", notes: "", setups: [],
-  reasons: {}, emotions: [], errors: [], tags: [], imgBefore: null, imgAfter: null,
+  reasons: {}, emotions: [], emotionIntensity: {}, errors: [], tags: [], imgBefore: null, imgAfter: null,
+  reviewWhatWorked: "", reviewWhatToImprove: "",
 };
 export const DEMO_TRADES = {
   "personal-1": [

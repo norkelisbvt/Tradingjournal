@@ -55,7 +55,7 @@ const EmotionCorrelationPanel = memo(function EmotionCorrelationPanel({ trades, 
           <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 4 }}>
             <thead>
               <tr>
-                {["Emoción", "Trades", "Winrate", "R promedio", "P&L total"].map((h, i) => (
+                {["Emoción", "Trades", "Intensidad", "Winrate", "R promedio", "P&L total"].map((h, i) => (
                   <th key={h} style={{ padding: "8px 6px", fontSize: FS.xs, fontWeight: 700, color: T.textFaint, textAlign: i === 0 ? "left" : "right", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${T.border}` }}>{h}</th>
                 ))}
               </tr>
@@ -70,6 +70,17 @@ const EmotionCorrelationPanel = memo(function EmotionCorrelationPanel({ trades, 
                       <span style={{ ...S.tag(resultColor), fontWeight: 700 }}>{meta.emoji} {meta.label}</span>
                     </td>
                     <td style={{ padding: "8px 6px", fontSize: FS.sm, color: T.textMuted, textAlign: "right" }}>{s.count}</td>
+                    <td style={{ padding: "8px 6px", textAlign: "right" }}>
+                      {s.avgIntensity == null ? (
+                        <span style={{ fontSize: FS.xs, color: T.textFaint }}>—</span>
+                      ) : (
+                        <span style={{ display: "inline-flex", gap: 2 }} title={`${s.avgIntensity.toFixed(1)}/5`}>
+                          {[1, 2, 3, 4, 5].map(i => (
+                            <span key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: i <= Math.round(s.avgIntensity) ? resultColor : "transparent", border: `1px solid ${i <= Math.round(s.avgIntensity) ? resultColor : T.border}` }} />
+                          ))}
+                        </span>
+                      )}
+                    </td>
                     <td style={{ padding: "8px 6px", fontSize: FS.sm, color: T.textMuted, textAlign: "right" }}>{pctFmt(s.winRate * 100, 0)}</td>
                     <td style={{ padding: "8px 6px", fontSize: FS.sm, fontWeight: 700, color: resultColor, textAlign: "right" }}>{s.avgR >= 0 ? "+" : ""}{s.avgR.toFixed(2)}R</td>
                     <td style={{ padding: "8px 6px", fontSize: FS.sm, fontWeight: 700, color: s.pnlTotal >= 0 ? T.gain : T.loss, textAlign: "right" }}>{money(s.pnlTotal)}</td>

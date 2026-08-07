@@ -9,6 +9,7 @@ import { ErrorTagSelector } from "./ErrorTagSelector";
 import { FreeTagsInput } from "./FreeTagsInput";
 import { ImageUpload } from "./ImageUpload";
 import { PositionSizeCalculator } from "./PositionSizeCalculator";
+import { PostTradeReview } from "./PostTradeReview";
 import { ReasonsChecklist } from "./ReasonsChecklist";
 import { SetupSelector } from "./SetupSelector";
 
@@ -42,6 +43,8 @@ const TradeForm = memo(function TradeForm({ form, setForm, onSave, onCancel, acc
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
         <div><label style={S.label}>Fecha de entrada</label><input type="date" value={form.date} onChange={f("date")} style={S.input} /></div>
         <div><label style={S.label}>Fecha de salida (opcional)</label><input type="date" value={form.exitDate} min={form.date || undefined} onChange={f("exitDate")} style={{ ...S.input, borderColor: form.exitDate && form.date && form.exitDate < form.date ? `${T.loss}66` : T.border }} /></div>
+        <div><label style={S.label}>Hora de entrada (opcional)</label><input type="time" value={form.time} onChange={f("time")} style={S.input} /></div>
+        <div><label style={S.label}>Hora de salida (opcional)</label><input type="time" value={form.exitTime} onChange={f("exitTime")} style={S.input} /></div>
         <div><label style={S.label}>Instrumento</label><select value={form.instrument} onChange={f("instrument")} style={S.input}>{INSTRUMENTS.map(i => <option key={i} value={i}>{instEmoji(i)} {instLabel(i)}</option>)}</select></div>
         <div>
           <label style={S.label}>Dirección</label>
@@ -95,9 +98,17 @@ const TradeForm = memo(function TradeForm({ form, setForm, onSave, onCancel, acc
       </div>
       <div style={{ borderTop: `1px solid ${T.border}`, margin: "18px 0" }} />
       <div style={{ marginBottom: 18 }}><ReasonsChecklist reasons={form.reasons} onChange={r => setForm(p => ({ ...p, reasons: r }))} reasonsList={reasonsList} setReasonsList={setReasonsList} /></div>
-      <div style={{ marginBottom: 18 }}><EmotionSelector selected={form.emotions} onChange={e => setForm(p => ({ ...p, emotions: e }))} /></div>
+      <div style={{ marginBottom: 18 }}><EmotionSelector selected={form.emotions} onChange={e => setForm(p => ({ ...p, emotions: e }))} intensity={form.emotionIntensity} onIntensityChange={m => setForm(p => ({ ...p, emotionIntensity: m }))} /></div>
       <div style={{ marginBottom: 18 }}><ErrorTagSelector selected={form.errors || []} onChange={e => setForm(p => ({ ...p, errors: e }))} errorsList={errorsList} setErrorsList={setErrorsList} /></div>
       <div style={{ marginBottom: 18 }}><FreeTagsInput tags={form.tags || []} onChange={v => setForm(p => ({ ...p, tags: v }))} accentColor={accentColor} /></div>
+      <div style={{ marginBottom: 18 }}>
+        <PostTradeReview
+          whatWorked={form.reviewWhatWorked || ""}
+          whatToImprove={form.reviewWhatToImprove || ""}
+          onChangeWorked={v => setForm(p => ({ ...p, reviewWhatWorked: v }))}
+          onChangeImprove={v => setForm(p => ({ ...p, reviewWhatToImprove: v }))}
+        />
+      </div>
       <div style={{ borderTop: `1px solid ${T.border}`, margin: "18px 0" }} />
       <div style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: FS.xs, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}><Camera size={11} />Capturas del trade</div>
