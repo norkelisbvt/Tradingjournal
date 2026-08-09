@@ -3,10 +3,15 @@
 // antes/después) con Supabase + R2. Mismo criterio "local-first" que
 // financeSync.js — ver ese archivo para el detalle del enfoque.
 //
-// v4: mapeo COMPLETO tras revisar TradeForm.jsx — se agregan
-// entry/exit/stopLoss/size/time/exitDate (faltaban) y "setups" pasa a
-// ser array (no "setup" singular, que nunca existió como tal en el
-// form real). Ver schema_patch_trades.sql para las columnas.
+// Detección de conflictos (optimistic concurrency): tanto trades como
+// accounts tienen `updated_at` en la base, actualizado automáticamente
+// por trigger en cada UPDATE. Cada objeto local guarda ese valor como
+// `updatedAt` desde la última vez que se leyó del servidor. Antes de
+// sobreescribir una fila ya existente, upsertTrade/upsertAccount
+// comparan el `updated_at` remoto ACTUAL contra ese valor conocido —
+// si no coinciden, alguien más lo cambió en el medio, y se lanza
+// SyncConflictError en vez de pisarlo en silencio. Ver cloudSync.js
+// para cómo se atrapa y se resuelve desde la UI.
 //   - Los ids de trade/cuenta son UUID generados por la app
 //     (ver newId() en cloudSync.js), no Date.now().
 //   - Las cuentas locales se identifican por localKey (ej. "personal-1"),
@@ -16,6 +21,20 @@
 // ════════════════════════════════════════════════════════════════════
 import { supabase } from "./supabaseClient";
 import { uploadTradeImage, getTradeImageUrlCached } from "./r2";
+
+// Se lanza cuando upsertTrade/upsertAccount detectan que la fila remota
+// cambió desde la última vez que la app la vio. Carga ambas versiones
+// para que la UI le muestre al usuario "tu versión" vs "la de la nube"
+// y decida, en vez de perder cambios en silencio.
+export class SyncConflictError extends Error {
+  constructor(entity, localData, remoteData) {
+    super(`Conflicto de sincronización: ${entity} ${localData.id} fue modificado en otro dispositivo`);
+    this.name = "SyncConflictError";
+    this.entity = entity; // "trade" | "account"
+    this.localData = localData;
+    this.remoteData = remoteData;
+  }
+}
 
 async function currentUserId() {
   const { data: { user } } = await supabase.auth.getUser();
@@ -50,6 +69,7 @@ export function rowToAccount(row) {
     archivado: row.archivado,
     fase: row.fase,
     riesgoPct: row.riesgo_pct != null ? Number(row.riesgo_pct) : null,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -61,7 +81,6 @@ export function rowToTrade(row) {
     time: row.hora ?? undefined,
     exitTime: row.hora_salida ?? undefined,
     exitDate: row.fecha_salida ?? undefined,
-    exitTime: row.hora_salida ?? undefined,
     instrument: row.instrumento,
     direction: row.direccion ?? undefined,
     session: row.sesion ?? undefined,
@@ -83,6 +102,7 @@ export function rowToTrade(row) {
     reviewWhatToImprove: row.revision_mejorar ?? undefined,
     imagenAntesKey: row.imagen_antes_key,
     imagenDespuesKey: row.imagen_despues_key,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -92,8 +112,22 @@ export function rowToTrade(row) {
 // upsert hace match por (user_id, local_key) en vez de por id. Una vez
 // que la respuesta trae el id real, quien llama debe guardarlo (ver
 // cloudSync.js: keyToRemoteId) para mandarlo en las próximas llamadas.
-export async function upsertAccount(acc) {
+export async function upsertAccount(acc, { force = false } = {}) {
   const userId = await currentUserId();
+
+  // Chequeo de conflicto: solo aplica a cuentas que YA tienen id remoto
+  // (o sea, no es la primera vez que se sincronizan) y que traen un
+  // `updatedAt` conocido para comparar. `force` lo salta a propósito —
+  // lo usa resolveConflict() en cloudSync.js cuando el usuario elige
+  // "usar mi versión" después de ver el conflicto.
+  if (!force && acc.id && acc.updatedAt) {
+    const { data: current, error: checkErr } = await supabase.from("accounts").select("*").eq("id", acc.id).maybeSingle();
+    if (checkErr) throw checkErr;
+    if (current && current.updated_at !== acc.updatedAt) {
+      throw new SyncConflictError("account", acc, rowToAccount(current));
+    }
+  }
+
   const row = {
     ...(acc.id ? { id: acc.id } : {}),
     user_id: userId,
@@ -130,8 +164,23 @@ export function numOrNull(v) {
   return Number.isNaN(n) ? null : n;
 }
 
-export async function upsertTrade(trade) {
+export async function upsertTrade(trade, { force = false } = {}) {
   const userId = await currentUserId();
+
+  // Mismo chequeo de conflicto que upsertAccount — ver el comentario ahí.
+  // Acá SÍ puede haber `trade.id` sin haberse sincronizado nunca (el id es
+  // un UUID generado localmente al crear el trade, no algo que asigna el
+  // servidor) — por eso el chequeo depende de `trade.updatedAt`, no solo
+  // de si `trade.id` existe: sin `updatedAt` conocido, no hay nada contra
+  // qué comparar, así que se deja pasar como creación normal.
+  if (!force && trade.id && trade.updatedAt) {
+    const { data: current, error: checkErr } = await supabase.from("trades").select("*").eq("id", trade.id).maybeSingle();
+    if (checkErr) throw checkErr;
+    if (current && current.updated_at !== trade.updatedAt) {
+      throw new SyncConflictError("trade", trade, rowToTrade(current));
+    }
+  }
+
   const row = {
     id: trade.id, // uuid generado por la app — ver newId() en cloudSync.js
     user_id: userId,
@@ -140,7 +189,6 @@ export async function upsertTrade(trade) {
     hora: trade.time || null,
     hora_salida: trade.exitTime || null,
     fecha_salida: trade.exitDate || null,
-    hora_salida: trade.exitTime || null,
     instrumento: trade.instrument,
     direccion: trade.direction ?? null,
     sesion: trade.session ?? null,

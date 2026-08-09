@@ -31,6 +31,11 @@ export function newId() {
 export function useCloudSync() {
   const [ready, setReady] = useState(false);
   const [status, setStatus] = useState("idle"); // idle | syncing | synced | error
+  // Conflictos de sincronización pendientes de que el usuario decida qué
+  // versión conservar. Cada uno: { id, entity: "trade"|"account",
+  // localKey (solo cuentas), localData, remoteData }. La UI (ver
+  // SyncConflictModal.jsx) lee este array y llama resolveConflict().
+  const [conflicts, setConflicts] = useState([]);
   const keyToRemoteId = useRef({}); // local_key de cuenta -> uuid remoto
 
   useEffect(() => {
@@ -53,10 +58,16 @@ export function useCloudSync() {
         nombre: acc.name, broker: acc.broker, moneda: acc.moneda || "USD",
         saldoInicial: acc.size ?? 0, archivado: !!acc.archivado,
         fase: acc.phase, riesgoPct: acc.riskPct,
+        updatedAt: acc.updatedAt,
       });
       keyToRemoteId.current[localKey] = remote.id;
       setStatus("synced");
     } catch (err) {
+      if (err instanceof tradesApi.SyncConflictError) {
+        setConflicts(c => [...c, { id: newId(), entity: "account", localKey, localData: err.localData, remoteData: err.remoteData }]);
+        setStatus("error");
+        return;
+      }
       console.error("[cloud] Error al subir cuenta:", err);
       setStatus("error");
     }
@@ -87,6 +98,11 @@ export function useCloudSync() {
       await tradesApi.upsertTrade({ ...trade, accountId });
       setStatus("synced");
     } catch (err) {
+      if (err instanceof tradesApi.SyncConflictError) {
+        setConflicts(c => [...c, { id: newId(), entity: "trade", localKey: localAccountKey, localData: err.localData, remoteData: err.remoteData }]);
+        setStatus("error");
+        return;
+      }
       console.error("[cloud] Error al subir trade:", err);
       setStatus("error");
     }
@@ -188,6 +204,7 @@ export function useCloudSync() {
           size: acc.saldoInicial, archivado: acc.archivado,
           phase: acc.fase ?? undefined,
           riskPct: acc.riesgoPct != null ? String(acc.riesgoPct) : undefined,
+          updatedAt: acc.updatedAt,
         };
         if (acc.grupo === "personal" || acc.grupo === "funded") {
           accountOrder[acc.grupo][acc.orden ?? accountOrder[acc.grupo].length] = key;
@@ -217,14 +234,54 @@ export function useCloudSync() {
     }
   }, [ready]);
 
+  // ── Resolución de conflictos ──
+  // El usuario elige, desde SyncConflictModal, qué versión conservar:
+  //   "mine"   → se reescribe la nube con la versión local (force=true,
+  //              salta el chequeo que generó el conflicto).
+  //   "theirs" → se descarta el cambio local; quien llama debe pisar el
+  //              estado local (trades/accounts) con `remoteData`, que
+  //              viene incluido en el valor devuelto para eso mismo.
+  // No hace falta que este archivo conozca los setters de React del
+  // componente que lo usa — por eso devuelve el resultado en vez de
+  // aplicarlo él mismo (ver nota al principio del archivo).
+  const resolveConflict = useCallback(async (conflictId, choice) => {
+    const conflict = conflicts.find(c => c.id === conflictId);
+    if (!conflict) return null;
+
+    try {
+      if (choice === "mine") {
+        if (conflict.entity === "account") {
+          const remote = await tradesApi.upsertAccount(conflict.localData, { force: true });
+          keyToRemoteId.current[conflict.localKey] = remote.id;
+          setConflicts(c => c.filter(x => x.id !== conflictId));
+          return { applied: "local", entity: "account", localKey: conflict.localKey, data: remote };
+        } else {
+          const remote = await tradesApi.upsertTrade(conflict.localData, { force: true });
+          setConflicts(c => c.filter(x => x.id !== conflictId));
+          return { applied: "local", entity: "trade", localKey: conflict.localKey, data: remote };
+        }
+      } else {
+        // "theirs": no hay nada que escribir en la nube — ya tiene la
+        // versión correcta. Solo se limpia el conflicto y se devuelve la
+        // data remota para que la UI actualice el estado local.
+        setConflicts(c => c.filter(x => x.id !== conflictId));
+        return { applied: "remote", entity: conflict.entity, localKey: conflict.localKey, data: conflict.remoteData };
+      }
+    } catch (err) {
+      console.error("[cloud] Error al resolver conflicto:", err);
+      setStatus("error");
+      return null;
+    }
+  }, [conflicts]);
+
   return {
-    ready, status,
+    ready, status, conflicts,
     syncAccountUpsert, syncAccountDelete,
     syncTradeUpsert, syncTradeDelete, syncTradeImageUpload,
     syncMovimientoUpsert, syncMovimientoDelete,
     syncCategoriaAdd, syncCategoriaRemove,
     syncRecurrenteUpsert, syncRecurrenteDelete,
     syncPresupuesto, syncFinConfig,
-    pullAll,
+    pullAll, resolveConflict,
   };
 }

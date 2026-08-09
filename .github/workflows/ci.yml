@@ -1,0 +1,84 @@
+name: CI
+
+# Corre en cada push a main y en cada Pull Request — así un error se detecta
+# ANTES de que quede mezclado en el historial, no después.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Tests unitarios
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - run: npm ci
+      - run: npx vitest run
+
+  build:
+    name: Build de producción
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - run: npm ci
+      # Necesita un cloudConfig.js real para compilar (está en .gitignore a
+      # propósito, ver nota en ese archivo) — acá se genera un stub de
+      # mentira solo para que el build no falle por el import faltante. No
+      # es una credencial real, no conecta a ningún Supabase de verdad.
+      - name: Crear cloudConfig.js de prueba (no es una credencial real)
+        run: |
+          cat > src/cloud/cloudConfig.js << 'EOF'
+          export const SUPABASE_URL = "https://placeholder.supabase.co";
+          export const SUPABASE_ANON_KEY = "placeholder";
+          EOF
+      - run: npm run build
+
+  visual:
+    name: Regresión visual (Storybook)
+    runs-on: ubuntu-latest
+    # Va después de que los tests unitarios pasen — si esos ya fallaron, no
+    # tiene sentido gastar tiempo bajando un navegador para esto todavía.
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - run: npm ci
+
+      - name: Instalar navegador de Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Build de Storybook
+        run: npm run build-storybook
+
+      - name: Comparar capturas contra las guardadas en el repo
+        run: npx playwright test
+
+      # Si algo cambió visualmente, este reporte queda descargable desde la
+      # pestaña "Actions" de GitHub (con el diff resaltado) — sin tener que
+      # reproducir el fallo en tu propia máquina para verlo.
+      - name: Subir reporte si falló
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14

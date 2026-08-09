@@ -1,5 +1,7 @@
 # Trading Journal — Guía para tenerlo en tu computadora (Windows)
 
+[![CI](https://github.com/norkelisbvt/Tradingjournal/actions/workflows/ci.yml/badge.svg)](https://github.com/norkelisbvt/Tradingjournal/actions/workflows/ci.yml)
+
 ## ⚠️ Importante sobre la ventana que abriste
 Esa ventana negra que dice "Welcome to Node.js v24.17.0" y tiene un `>` es la
 **consola interactiva de Node (REPL)**, no una terminal normal. Ahí no puedes

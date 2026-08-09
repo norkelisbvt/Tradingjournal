@@ -25,6 +25,7 @@ function makeChain(result) {
     update: vi.fn(() => chain),
     eq: vi.fn(() => chain),
     single: vi.fn(() => chain),
+    maybeSingle: vi.fn(() => chain),
     then: (resolve, reject) => Promise.resolve(result).then(resolve, reject),
   };
   return chain;
@@ -208,6 +209,24 @@ describe("upsertAccount", () => {
     mockFrom.mockReturnValue(makeChain({ data: null, error: new Error("RLS violation") }));
     await expect(upsertAccount({ localKey: "k1", nombre: "N" })).rejects.toThrow("RLS violation");
   });
+
+  // ─── Detección de conflictos (optimistic concurrency) ───
+  it("lanza SyncConflictError si el updated_at remoto de la cuenta no coincide con el conocido", async () => {
+    const checkChain = makeChain({ data: { id: "a1", updated_at: "2026-08-06T12:00:00Z" }, error: null });
+    mockFrom.mockReturnValueOnce(checkChain);
+
+    await expect(upsertAccount({ id: "a1", localKey: "k1", nombre: "N", updatedAt: "2026-08-06T10:00:00Z" }))
+      .rejects.toMatchObject({ name: "SyncConflictError", entity: "account" });
+    expect(checkChain.upsert).not.toHaveBeenCalled();
+  });
+
+  it("con force:true salta el chequeo de conflicto en cuentas", async () => {
+    const writeChain = makeChain({ data: { id: "a1", local_key: "k1", grupo: "personal", nombre: "N", saldo_inicial: 0 }, error: null });
+    mockFrom.mockReturnValue(writeChain);
+
+    await upsertAccount({ id: "a1", localKey: "k1", nombre: "N", updatedAt: "viejo" }, { force: true });
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ─── deleteAccount ───────────────────────────────────────────────────────
@@ -293,6 +312,43 @@ describe("upsertTrade", () => {
   it("propaga el error de Supabase", async () => {
     mockFrom.mockReturnValue(makeChain({ data: null, error: new Error("constraint violation") }));
     await expect(upsertTrade({ id: "t1", date: "2026-08-01", instrument: "X" })).rejects.toThrow("constraint violation");
+  });
+
+  // ─── Detección de conflictos (optimistic concurrency) ───
+  it("lanza SyncConflictError si el updated_at remoto no coincide con el conocido, y NO llega a escribir", async () => {
+    const checkChain = makeChain({ data: { id: "t1", updated_at: "2026-08-06T12:00:00Z" }, error: null });
+    mockFrom.mockReturnValueOnce(checkChain);
+
+    await expect(upsertTrade({ id: "t1", date: "2026-08-01", instrument: "NAS100", updatedAt: "2026-08-06T10:00:00Z" }))
+      .rejects.toMatchObject({ name: "SyncConflictError", entity: "trade" });
+    expect(checkChain.upsert).not.toHaveBeenCalled();
+  });
+
+  it("si el updated_at remoto coincide con el conocido, no hay conflicto y procede al upsert normal", async () => {
+    const ts = "2026-08-06T10:00:00Z";
+    const checkChain = makeChain({ data: { id: "t1", updated_at: ts }, error: null });
+    const writeChain = makeChain({ data: { id: "t1", account_id: "acc1", fecha: "2026-08-01", instrumento: "NAS100" }, error: null });
+    mockFrom.mockReturnValueOnce(checkChain).mockReturnValueOnce(writeChain);
+
+    const result = await upsertTrade({ id: "t1", accountId: "acc1", date: "2026-08-01", instrument: "NAS100", updatedAt: ts });
+    expect(writeChain.upsert).toHaveBeenCalled();
+    expect(result.id).toBe("t1");
+  });
+
+  it("con force:true salta el chequeo y escribe directo (usado al resolver un conflicto)", async () => {
+    const writeChain = makeChain({ data: { id: "t1", account_id: "acc1", fecha: "2026-08-01", instrumento: "NAS100" }, error: null });
+    mockFrom.mockReturnValue(writeChain);
+
+    await upsertTrade({ id: "t1", accountId: "acc1", date: "2026-08-01", instrument: "NAS100", updatedAt: "cualquier-valor-viejo" }, { force: true });
+    expect(mockFrom).toHaveBeenCalledTimes(1); // sin la llamada extra de chequeo
+  });
+
+  it("si el trade no tiene updatedAt conocido (creación nueva), no hace chequeo previo", async () => {
+    const writeChain = makeChain({ data: { id: "t1", account_id: "acc1", fecha: "2026-08-01", instrumento: "NAS100" }, error: null });
+    mockFrom.mockReturnValue(writeChain);
+
+    await upsertTrade({ id: "t1", accountId: "acc1", date: "2026-08-01", instrument: "NAS100" });
+    expect(mockFrom).toHaveBeenCalledTimes(1);
   });
 });
 

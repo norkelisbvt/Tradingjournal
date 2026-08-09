@@ -12,8 +12,7 @@
 // Correr con: npx vitest run
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import React from "react";
-import { act } from "react-dom/test-utils";
+import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 
 // Sin esto, React tira un warning benigno ("act environment not configured")
@@ -57,6 +56,25 @@ const mockDeleteTrade = vi.fn();
 const mockFetchAllTradingData = vi.fn();
 const mockAttachTradeImage = vi.fn();
 
+// SyncConflictError es una clase real (no un vi.fn()) para que
+// `err instanceof tradesApi.SyncConflictError` funcione tal cual en el
+// código real de cloudSync.js — mockear esto como una función rompería
+// ese chequeo silenciosamente. Va envuelta en vi.hoisted() porque
+// vi.mock() se sube al principio del archivo automáticamente, antes de
+// que una `class` declarada más abajo llegue a existir.
+const { SyncConflictError } = vi.hoisted(() => {
+  class SyncConflictError extends Error {
+    constructor(entity, localData, remoteData) {
+      super(`Conflicto: ${entity}`);
+      this.name = "SyncConflictError";
+      this.entity = entity;
+      this.localData = localData;
+      this.remoteData = remoteData;
+    }
+  }
+  return { SyncConflictError };
+});
+
 vi.mock("./tradesSync", () => ({
   upsertAccount: (...a) => mockUpsertAccount(...a),
   deleteAccount: (...a) => mockDeleteAccount(...a),
@@ -64,6 +82,7 @@ vi.mock("./tradesSync", () => ({
   deleteTrade: (...a) => mockDeleteTrade(...a),
   fetchAllTradingData: (...a) => mockFetchAllTradingData(...a),
   attachTradeImage: (...a) => mockAttachTradeImage(...a),
+  SyncConflictError,
 }));
 
 const mockFetchAllFinanceData = vi.fn();
@@ -239,5 +258,69 @@ describe("useCloudSync — pullAll", () => {
 
     expect(pulled).toBeNull();
     expect(result.current.status).toBe("error");
+  });
+});
+
+// ─── Conflictos de sincronización ────────────────────────────────────────
+describe("useCloudSync — conflictos", () => {
+  it("un SyncConflictError al subir un trade se guarda en `conflicts` en vez de perderse en consola", async () => {
+    mockGetCurrentUser.mockResolvedValue({ id: "u1" });
+    mockUpsertAccount.mockResolvedValue({ id: "remote-acc-1", localKey: "k1" });
+    mockUpsertTrade.mockRejectedValue(new SyncConflictError("trade", { id: "t1", date: "2026-08-01" }, { id: "t1", date: "2026-08-02" }));
+
+    const { result } = renderHook(() => useCloudSync());
+    await act(async () => {});
+    await act(async () => { await result.current.syncAccountUpsert("k1", { name: "N" }, "personal", 0); });
+    await act(async () => { await result.current.syncTradeUpsert("k1", { id: "t1", date: "2026-08-01" }); });
+
+    expect(result.current.conflicts).toHaveLength(1);
+    expect(result.current.conflicts[0].entity).toBe("trade");
+    expect(result.current.status).toBe("error");
+  });
+
+  it("resolveConflict('theirs') limpia el conflicto y devuelve la data remota para pisar el estado local", async () => {
+    mockGetCurrentUser.mockResolvedValue({ id: "u1" });
+    mockUpsertAccount.mockResolvedValue({ id: "remote-acc-1", localKey: "k1" });
+    const remoteVersion = { id: "t1", date: "2026-08-02", pnl: 999 };
+    mockUpsertTrade.mockRejectedValue(new SyncConflictError("trade", { id: "t1", date: "2026-08-01" }, remoteVersion));
+
+    const { result } = renderHook(() => useCloudSync());
+    await act(async () => {});
+    await act(async () => { await result.current.syncAccountUpsert("k1", { name: "N" }, "personal", 0); });
+    await act(async () => { await result.current.syncTradeUpsert("k1", { id: "t1", date: "2026-08-01" }); });
+
+    const conflictId = result.current.conflicts[0].id;
+    let outcome;
+    await act(async () => { outcome = await result.current.resolveConflict(conflictId, "theirs"); });
+
+    expect(outcome).toEqual({ applied: "remote", entity: "trade", localKey: "k1", data: remoteVersion });
+    expect(result.current.conflicts).toHaveLength(0);
+    // "theirs" no debe volver a llamar a upsertTrade — la nube ya tiene la versión correcta
+    expect(mockUpsertTrade).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolveConflict('mine') reintenta el upsert con force:true y limpia el conflicto", async () => {
+    mockGetCurrentUser.mockResolvedValue({ id: "u1" });
+    mockUpsertAccount.mockResolvedValue({ id: "remote-acc-1", localKey: "k1" });
+    mockUpsertTrade
+      .mockRejectedValueOnce(new SyncConflictError("trade", { id: "t1", date: "2026-08-01" }, { id: "t1", date: "2026-08-02" }))
+      .mockResolvedValueOnce({ id: "t1", date: "2026-08-01" });
+
+    const { result } = renderHook(() => useCloudSync());
+    await act(async () => {});
+    await act(async () => { await result.current.syncAccountUpsert("k1", { name: "N" }, "personal", 0); });
+    await act(async () => { await result.current.syncTradeUpsert("k1", { id: "t1", date: "2026-08-01" }); });
+
+    const conflictId = result.current.conflicts[0].id;
+    let outcome;
+    await act(async () => { outcome = await result.current.resolveConflict(conflictId, "mine"); });
+
+    expect(outcome.applied).toBe("local");
+    expect(result.current.conflicts).toHaveLength(0);
+    // segunda llamada a upsertTrade con force:true, forzando la escritura
+    expect(mockUpsertTrade).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: "t1" }),
+      { force: true }
+    );
   });
 });
