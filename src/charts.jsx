@@ -270,8 +270,12 @@ export function InteractiveCurveChart({
           />
           {/* Punto final destacado */}
           <circle cx={xScale(n - 1)} cy={yScale(visiblePoints[n - 1].y)} r="4" fill={color} stroke={T.surface} strokeWidth="1.5" className="hz-draw-dot" />
-          {/* Etiquetas eje X: inicio / medio / fin */}
-          {[0, Math.floor((n - 1) / 2), n - 1].map(i => (
+          {/* Etiquetas eje X: inicio / medio / fin. Con pocos puntos visibles
+              (ej. n=2) el índice "medio" puede coincidir con el de inicio o
+              fin — Set() saca el duplicado antes de generar las keys, si no
+              React tira "two children with the same key" al haber dos <text>
+              con key=0. */}
+          {[...new Set([0, Math.floor((n - 1) / 2), n - 1])].map(i => (
             <text key={i} x={xScale(i)} y={H - 8} fontSize="9.5" fill={T.textFaint}
               textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"}>{visiblePoints[i].label}</text>
           ))}

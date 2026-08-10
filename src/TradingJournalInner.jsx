@@ -44,6 +44,7 @@ import { useReminders } from "./hooks/useReminders";
 import { useThemeColorMeta } from "./hooks/useThemeColorMeta";
 import { useUndoToast } from "./hooks/useUndoToast";
 import { useUIModals } from "./hooks/useUIModals";
+import { useNavigationView } from "./hooks/useNavigationView";
 import { idbGetImage, isImageRef, migrateEmbeddedImages } from "./lib/imageStore";
 import { WEEKDAY_HEADER_LABELS } from "./styles/sharedStyles";
 import { useCloudSync, newId } from "./cloud/cloudSync";
@@ -379,7 +380,21 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
   const [trades, setTrades] = useState(DEMO_TRADES);
   const [accounts, setAccounts] = useState(DEFAULT_ACCOUNTS);
   const [accountOrder, setAccountOrder] = useState(DEFAULT_ACCOUNT_ORDER);
-  const [tab, setTab] = useState("dashboard");
+  // Navegación / vista (tab activo, año-mes visualizado, agrupación,
+  // paginación) — extraído a un hook aparte, ver hooks/useNavigationView.js.
+  const {
+    tab, setTab,
+    tabTransitioning,
+    viewYear, setViewYear,
+    viewMonth, setViewMonth,
+    collapsedGroups, setCollapsedGroups,
+    tradesPage, setTradesPage,
+    groupBy, setGroupBy,
+  } = useNavigationView(account);
+  // "Hoy" real (no confundir con viewYear/viewMonth, que es el mes que se
+  // está MIRANDO) — usado para el botón "Hoy" y para resaltar el día actual
+  // en la grilla del calendario.
+  const today = new Date();
   const [form, setForm] = useState(EMPTY_FORM);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -462,21 +477,6 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
   const [filterSetup, setFilterSetup] = useState("All");
   const [chartDateRange, setChartDateRange] = useState({ preset: "month", customFrom: toISODate(new Date()), customTo: toISODate(new Date()) });
   const [backtestMode, setBacktestMode] = useState(false);
-  const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
-
-  // Muestra un skeleton breve (180ms) al cambiar de pestaña, cuenta o mes
-  // visualizado, en vez del salto seco de contenido que había antes. Como
-  // todos los datos viven en localStorage (sin fetch real), no hay una carga
-  // "de verdad" que esperar — esto es puramente para suavizar la transición
-  // visual entre vistas.
-  const [tabTransitioning, setTabTransitioning] = useState(false);
-  useEffect(() => {
-    setTabTransitioning(true);
-    const timer = setTimeout(() => setTabTransitioning(false), 180);
-    return () => clearTimeout(timer);
-  }, [tab, account, viewMonth, viewYear]);
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState(""); // "", "saving", "saved"
   // Guarda el último fallo de autoguardado (si lo hay) para mostrarlo como
@@ -486,13 +486,7 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
   // ahí sí hay una acción de rescate útil (descargar respaldo en archivo).
   const [saveError, setSaveError] = useState(null); // { type: "quota" | "other", message }
   const [saveErrorDismissed, setSaveErrorDismissed] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState({});
-  // Paginación de la tabla de trades: página actual por grupo (mes/semana), para
-  // no renderizar cientos de filas de una sola vez cuando hay mucho historial.
-  const [tradesPage, setTradesPage] = useState({});
   const TRADES_PAGE_SIZE = 15;
-  // Agrupación de la vista "Trades": por mes o por semana (ISO, lunes a domingo).
-  const [groupBy, setGroupBy] = useState("month");
   const [themeMode, setThemeMode] = useState(() => {
     try { return localStorage.getItem("trading-journal-theme") || "light"; } catch { return "light"; }
   });

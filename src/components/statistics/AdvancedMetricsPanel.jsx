@@ -2,7 +2,7 @@
 import { useState, useMemo, memo } from "react";
 import { Ruler, ChevronDown } from "lucide-react";
 import { T, FS, S, EASE } from "../../theme";
-import { money, pctFmt, moneyCompact, computeAdvancedMetrics } from "../../utils";
+import { money, pctFmt, moneyCompact, computeAdvancedMetrics, computeHoldTimeStats, formatDuration } from "../../utils";
 import { InteractiveCurveChart, RMultipleDistribution } from "../../charts";
 
 // themeMode solo se recibe para que memo() note el cambio de tema (T se lee
@@ -15,6 +15,7 @@ const AdvancedMetricsPanel = memo(function AdvancedMetricsPanel({ trades, accent
   // no hace falta que compitan por atención cada vez que se entra al tab.
   const [showAdvanced, setShowAdvanced] = useState(false);
   const m = useMemo(() => computeAdvancedMetrics(trades, accountSize), [trades, accountSize]);
+  const holdStats = useMemo(() => computeHoldTimeStats(trades, accountSize), [trades, accountSize]);
   const riskOfRuin = useMemo(() => m.computeRiskOfRuin(), [m]);
 
   if (!trades.length) {
@@ -87,6 +88,44 @@ const AdvancedMetricsPanel = memo(function AdvancedMetricsPanel({ trades, accent
           {riskOfRuin != null && (
             <div style={{ fontSize: FS.xs, color: T.textFaint, marginTop: -10, marginBottom: 18 }}>
               Simulación Monte Carlo (1500 corridas) remuestreando tus propios R-múltiplos históricos, asumiendo un riesgo promedio de {riskOfRuin.avgRiskPct.toFixed(2)}% de la cuenta por trade. Es una estimación estadística sobre tu comportamiento pasado, no una garantía a futuro.
+            </div>
+          )}
+
+          {/* Duración del trade (hold time): solo aparece si hay al menos un
+              trade con hora de entrada Y de salida cargadas — sin ambas no
+              hay forma de calcular una duración real (ver nota en utils.js). */}
+          {holdStats && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: FS.xs, fontWeight: 700, color: T.textMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Duración del trade (hold time)</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 10, marginBottom: 12 }}>
+                {metricBox("Duración prom. — ganadores", holdStats.avgMinutesWin != null ? formatDuration(holdStats.avgMinutesWin) : "—", "tiempo hasta cerrar en positivo", T.gain)}
+                {metricBox("Duración prom. — perdedores", holdStats.avgMinutesLoss != null ? formatDuration(holdStats.avgMinutesLoss) : "—", "tiempo hasta cerrar en negativo", T.loss)}
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    {["Duración", "Trades", "Winrate", "R promedio"].map((h, i) => (
+                      <th key={h} style={{ padding: "6px 4px", fontSize: FS.xs, fontWeight: 700, color: T.textFaint, textAlign: i === 0 ? "left" : "right", textTransform: "uppercase", letterSpacing: "0.05em", borderBottom: `1px solid ${T.border}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {holdStats.buckets.map(b => {
+                    const color = b.avgR > 0.05 ? T.gain : b.avgR < -0.05 ? T.loss : T.textMuted;
+                    return (
+                      <tr key={b.id} style={{ borderBottom: `1px solid ${T.border}` }}>
+                        <td style={{ padding: "6px 4px", fontSize: FS.sm, fontWeight: 600, color: T.text }}>{b.label}</td>
+                        <td style={{ padding: "6px 4px", fontSize: FS.sm, color: T.textMuted, textAlign: "right" }}>{b.count}</td>
+                        <td style={{ padding: "6px 4px", fontSize: FS.sm, color: T.textMuted, textAlign: "right" }}>{pctFmt(b.winRate * 100, 0)}</td>
+                        <td style={{ padding: "6px 4px", fontSize: FS.sm, fontWeight: 700, color, textAlign: "right" }}>{b.avgR >= 0 ? "+" : ""}{b.avgR.toFixed(2)}R</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div style={{ fontSize: FS.xs, color: T.textFaint, marginTop: 8 }}>
+                Calculado sobre {holdStats.coveredCount} de {holdStats.totalCount} trades del período — los que tienen hora de entrada y de salida cargadas.
+              </div>
             </div>
           )}
 
