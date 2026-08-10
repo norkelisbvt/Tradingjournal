@@ -45,6 +45,8 @@ import { useThemeColorMeta } from "./hooks/useThemeColorMeta";
 import { useUndoToast } from "./hooks/useUndoToast";
 import { useUIModals } from "./hooks/useUIModals";
 import { useNavigationView } from "./hooks/useNavigationView";
+import { useTradeFilters } from "./hooks/useTradeFilters";
+import { useConfigurableLists } from "./hooks/useConfigurableLists";
 import { idbGetImage, isImageRef, migrateEmbeddedImages } from "./lib/imageStore";
 import { WEEKDAY_HEADER_LABELS } from "./styles/sharedStyles";
 import { useCloudSync, newId } from "./cloud/cloudSync";
@@ -400,7 +402,6 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
   const [editId, setEditId] = useState(null);
   const [detailTrade, setDetailTrade] = useState(null);
   const [dayModalDate, setDayModalDate] = useState(null);
-  const [reasonsList, setReasonsList] = useState(DEFAULT_REASONS);
   // Confirmación de borrado + deshacer: confirmDialog describe la acción pendiente
   // de confirmar (trade o cuenta); el toast de deshacer se comparte para ambas.
   const { toast: undoToast, pushUndo, pushSuccess, undo: undoLastAction, dismiss: dismissUndo } = useUndoToast();
@@ -449,8 +450,6 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
   // Lección del día: notas libres del día (planes, reflexiones random) etiquetadas
   // como "trading" o "personal", listadas agrupadas por mes en la pestaña Mindset.
   const [dailyLessons, setDailyLessons] = useState([]);
-  // Búsqueda libre en la pestaña Trades (busca en notas, tags, setup e instrumento).
-  const [tradeSearch, setTradeSearch] = useState("");
   // Metas mensuales de P&L por cuenta: { [account]: { "YYYY-MM": monto } }.
   const [monthlyGoals, setMonthlyGoals] = useState({});
   // Recordatorio periódico de respaldo: guarda cuándo fue el último respaldo real,
@@ -466,17 +465,24 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
     const unsubscribe = window.api.onUpdateStatus(setUpdateStatus);
     return unsubscribe;
   }, []);
-  const [setupsList, setSetupsList] = useState(() => {
-    const seeds = new Set();
-    Object.values(DEMO_TRADES).forEach(arr => arr.forEach(t => { if (t.setup) seeds.add(t.setup); }));
-    return [...seeds].sort();
-  });
-  const [errorsList, setErrorsList] = useState(DEFAULT_ERRORS);
-  const [instrumentSpecs, setInstrumentSpecs] = useState(DEFAULT_INSTRUMENT_SPECS);
-  const [filterInst, setFilterInst] = useState([...INSTRUMENTS]);
-  const [filterSetup, setFilterSetup] = useState("All");
-  const [chartDateRange, setChartDateRange] = useState({ preset: "month", customFrom: toISODate(new Date()), customTo: toISODate(new Date()) });
-  const [backtestMode, setBacktestMode] = useState(false);
+  // Listas configurables por el usuario (razones, setups, errores, specs de
+  // instrumentos) — extraídas a un hook aparte, ver hooks/useConfigurableLists.js.
+  const {
+    reasonsList, setReasonsList,
+    setupsList, setSetupsList,
+    errorsList, setErrorsList,
+    instrumentSpecs, setInstrumentSpecs,
+  } = useConfigurableLists();
+  // Filtros de Trades (búsqueda, instrumentos visibles, setup, rango de
+  // fechas del gráfico) y modo Backtesting — extraídos a un hook aparte, ver
+  // hooks/useTradeFilters.js.
+  const {
+    tradeSearch, setTradeSearch,
+    filterInst, setFilterInst,
+    filterSetup, setFilterSetup,
+    chartDateRange, setChartDateRange,
+    backtestMode, setBacktestMode,
+  } = useTradeFilters();
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState(""); // "", "saving", "saved"
   // Guarda el último fallo de autoguardado (si lo hay) para mostrarlo como
