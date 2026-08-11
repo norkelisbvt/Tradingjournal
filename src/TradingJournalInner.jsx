@@ -47,6 +47,7 @@ import { useUIModals } from "./hooks/useUIModals";
 import { useNavigationView } from "./hooks/useNavigationView";
 import { useTradeFilters } from "./hooks/useTradeFilters";
 import { useConfigurableLists } from "./hooks/useConfigurableLists";
+import { usePersistenceStatus } from "./hooks/usePersistenceStatus";
 import { idbGetImage, isImageRef, migrateEmbeddedImages } from "./lib/imageStore";
 import { WEEKDAY_HEADER_LABELS } from "./styles/sharedStyles";
 import { useCloudSync, newId } from "./cloud/cloudSync";
@@ -452,14 +453,19 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
   const [dailyLessons, setDailyLessons] = useState([]);
   // Metas mensuales de P&L por cuenta: { [account]: { "YYYY-MM": monto } }.
   const [monthlyGoals, setMonthlyGoals] = useState({});
-  // Recordatorio periódico de respaldo: guarda cuándo fue el último respaldo real,
-  // para poder avisar cada 7 días si no se ha vuelto a respaldar.
-  const [lastBackupAt, setLastBackupAt] = useState(null);
-  const [backupBannerDismissed, setBackupBannerDismissed] = useState(false);
-  // Estado de auto-actualización (viene de main.js vía IPC): null mientras no
-  // hay nada relevante que mostrar; "available"/"downloading"/"downloaded"/
-  // "error" cuando sí. No existe en el navegador (solo Electron empaquetado).
-  const [updateStatus, setUpdateStatus] = useState(null);
+  // Estado de persistencia/guardado (loaded, saveStatus, saveError,
+  // lastBackupAt, updateStatus, etc.) — extraído a un hook aparte, ver
+  // hooks/usePersistenceStatus.js. Los useEffect que usan estos valores se
+  // quedan acá abajo tal cual estaban, sin tocar su lógica.
+  const {
+    loaded, setLoaded,
+    saveStatus, setSaveStatus,
+    saveError, setSaveError,
+    saveErrorDismissed, setSaveErrorDismissed,
+    lastBackupAt, setLastBackupAt,
+    backupBannerDismissed, setBackupBannerDismissed,
+    updateStatus, setUpdateStatus,
+  } = usePersistenceStatus();
   useEffect(() => {
     if (!window.api?.onUpdateStatus) return;
     const unsubscribe = window.api.onUpdateStatus(setUpdateStatus);
@@ -483,15 +489,6 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
     chartDateRange, setChartDateRange,
     backtestMode, setBacktestMode,
   } = useTradeFilters();
-  const [loaded, setLoaded] = useState(false);
-  const [saveStatus, setSaveStatus] = useState(""); // "", "saving", "saved"
-  // Guarda el último fallo de autoguardado (si lo hay) para mostrarlo como
-  // banner persistente en vez de solo un console.error silencioso. "quota"
-  // distingue el caso de que localStorage se haya quedado sin espacio (el
-  // riesgo real a largo plazo con historiales grandes + imágenes), porque
-  // ahí sí hay una acción de rescate útil (descargar respaldo en archivo).
-  const [saveError, setSaveError] = useState(null); // { type: "quota" | "other", message }
-  const [saveErrorDismissed, setSaveErrorDismissed] = useState(false);
   const TRADES_PAGE_SIZE = 15;
   const [themeMode, setThemeMode] = useState(() => {
     try { return localStorage.getItem("trading-journal-theme") || "light"; } catch { return "light"; }
