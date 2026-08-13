@@ -1,7 +1,7 @@
 // Generado por refactor automático a partir de TradingJournal.jsx original (revisar antes de usar en producción).
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, memo, lazy, Suspense, Component } from "react";
 import jsPDF from "jspdf";
-import { Crown, LayoutDashboard, CalendarDays, ListChecks, LineChart as LineChartIcon, BarChart3, Image as ImageIcon, Plus, History, Sun, Moon, Lock, MoreVertical, Save, RotateCcw, KeyRound, Pencil, Trash2, FileText, Check, X, GitCompare, Brain, Globe, ArrowLeftRight, ArrowUpDown, Target, Ruler, DollarSign, Percent, Wallet, TrendingUp, TrendingDown, AlertTriangle, AlertOctagon, Bell, ArrowUpRight, SlidersHorizontal, Type, Hash, Tag, ChevronLeft, ChevronRight, Home, UtensilsCrossed, Car, HeartPulse, Gamepad2, Repeat, MoreHorizontal, Briefcase, Laptop, Gift } from "lucide-react";
+import { Crown, LayoutDashboard, CalendarDays, ListChecks, LineChart as LineChartIcon, BarChart3, Image as ImageIcon, Plus, History, Sun, Moon, Lock, MoreVertical, Save, RotateCcw, KeyRound, Pencil, Trash2, FileText, Check, X, GitCompare, Brain, Globe, ArrowLeftRight, ArrowUpDown, Target, Ruler, DollarSign, Percent, Wallet, TrendingUp, TrendingDown, AlertTriangle, AlertOctagon, Bell, ArrowUpRight, SlidersHorizontal, Type, Hash, Tag, ChevronLeft, ChevronRight, Home, UtensilsCrossed, Car, HeartPulse, Gamepad2, Repeat, MoreHorizontal, Briefcase, Laptop, Gift, Zap } from "lucide-react";
 import { T, IS_DARK, applyTheme, FS, RADIUS, UI_FONT, GoogleFontImport, numMonoStyle, S, EASE, Z } from "./theme";
 import { useFocusTrap } from "./hooks/useFocusTrap";
 import { useAnimatedNumber } from "./hooks/useAnimatedNumber";
@@ -39,6 +39,7 @@ const MindsetView = lazy(() => import("./components/routine/MindsetView").then(m
 const AccountComparisonView = lazy(() => import("./components/statistics/AccountComparisonView").then(m => ({ default: m.AccountComparisonView })));
 const StatisticsView = lazy(() => import("./components/statistics/StatisticsView").then(m => ({ default: m.StatisticsView })));
 import { TradeForm } from "./components/trades/TradeForm";
+import { QuickTradeForm } from "./components/trades/QuickTradeForm";
 import { EmotionCorrelationPanel } from "./components/trades/EmotionCorrelationPanel";
 import { useReminders } from "./hooks/useReminders";
 import { useThemeColorMeta } from "./hooks/useThemeColorMeta";
@@ -48,6 +49,7 @@ import { useNavigationView } from "./hooks/useNavigationView";
 import { useTradeFilters } from "./hooks/useTradeFilters";
 import { useConfigurableLists } from "./hooks/useConfigurableLists";
 import { usePersistenceStatus } from "./hooks/usePersistenceStatus";
+import { useTradeEditSession } from "./hooks/useTradeEditSession";
 import { idbGetImage, isImageRef, migrateEmbeddedImages } from "./lib/imageStore";
 import { WEEKDAY_HEADER_LABELS } from "./styles/sharedStyles";
 import { useCloudSync, newId } from "./cloud/cloudSync";
@@ -398,11 +400,21 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
   // está MIRANDO) — usado para el botón "Hoy" y para resaltar el día actual
   // en la grilla del calendario.
   const today = new Date();
-  const [form, setForm] = useState(EMPTY_FORM);
-  const [showForm, setShowForm] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [detailTrade, setDetailTrade] = useState(null);
-  const [dayModalDate, setDayModalDate] = useState(null);
+  // Sesión de edición de trade (form, showForm, editId, detailTrade,
+  // dayModalDate) — extraída a un hook aparte, ver hooks/useTradeEditSession.js.
+  const {
+    form, setForm,
+    showForm, setShowForm,
+    editId, setEditId,
+    detailTrade, setDetailTrade,
+    dayModalDate, setDayModalDate,
+  } = useTradeEditSession();
+  // Carga rápida vs. completa: por defecto Rápido para trades NUEVOS (menos
+  // fricción justo después de cerrar la operación); al editar uno existente
+  // siempre se ve el form completo, sin importar este toggle — no tendría
+  // sentido "editar en modo rápido" y esconder campos que ya tienen datos.
+  const [quickEntryMode, setQuickEntryMode] = useState(true);
+  const showQuickForm = quickEntryMode && !editId;
   // Confirmación de borrado + deshacer: confirmDialog describe la acción pendiente
   // de confirmar (trade o cuenta); el toast de deshacer se comparte para ambas.
   const { toast: undoToast, pushUndo, pushSuccess, undo: undoLastAction, dismiss: dismissUndo } = useUndoToast();
@@ -969,9 +981,12 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
     return res.blob();
   }
 
-  const saveTrade = useCallback(() => {
+  const saveTrade = useCallback((overrides = {}) => {
     if (!form.date || !form.pnl) return;
-    const trade = { ...form, pnl: parseFloat(form.pnl), id: editId || newId() };
+    // overrides (no form directamente) es lo que decide reviewCompleted —
+    // así se evita cualquier problema de timing entre un setForm() reciente
+    // y este guardado en el mismo ciclo de eventos (setState es asíncrono).
+    const trade = { ...form, ...overrides, pnl: parseFloat(overrides.pnl ?? form.pnl), id: editId || newId() };
     const savedAccount = account;
     const previous = editId ? (trades[savedAccount] || []).find(t => t.id === editId) : null;
     if (editId) {
@@ -1040,7 +1055,7 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
     });
   }, [account, trades, pushUndo, cloud]);
   const openEdit = useCallback((t) => { setForm({ ...EMPTY_FORM, ...t, pnl: String(t.pnl), reasons: t.reasons || {}, emotions: t.emotions || [], errors: t.errors || [], tags: t.tags || [], setups: getTradeSetups(t), imgBefore: t.imgBefore || null, imgAfter: t.imgAfter || null }); setEditId(t.id); setShowForm(true); }, []);
-  const openNew = useCallback((date) => { setForm({ ...EMPTY_FORM, date: date || "", riskPct: accounts[account].riskPct || "" }); setEditId(null); setShowForm(true); }, [accounts, account]);
+  const openNew = useCallback((date) => { setForm({ ...EMPTY_FORM, date: date || "", riskPct: accounts[account].riskPct || "" }); setEditId(null); setShowForm(true); setQuickEntryMode(true); }, [accounts, account]);
 
   const restoreInputRef = useRef();
   const chartRef = useRef(null);
@@ -1707,6 +1722,23 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
 
           <AccountBalanceCard account={account} group={group} accounts={accounts} allTrades={trades} setAccounts={setAccounts} accentColor={accentColor} viewYear={viewYear} viewMonth={viewMonth} onAddAccount={addSubAccount} onDeleteAccount={deleteSubAccount} canDelete={group !== "backtest" && (accountOrder[group]?.length || 0) > 1} />
           <RiskAlertBanner acc={accounts[account]} trades={currentTrades} />
+          {(() => {
+            const pendingCount = currentTrades.filter(t => t.reviewCompleted === false).length;
+            if (pendingCount === 0) return null;
+            return (
+              <button onClick={() => setTab("trades")}
+                style={{
+                  display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", cursor: "pointer",
+                  padding: "10px 14px", marginBottom: 14, borderRadius: 10, border: `1px solid ${accentColor}40`,
+                  background: `${accentColor}0d`, color: T.text, fontSize: FS.sm, fontFamily: "inherit",
+                }}>
+                <Zap size={13} color={accentColor} />
+                <span>
+                  Tenés <b style={{ color: accentColor }}>{pendingCount}</b> trade{pendingCount === 1 ? "" : "s"} cargado{pendingCount === 1 ? "" : "s"} rápido — falta completar el review (razones, errores, notas).
+                </span>
+              </button>
+            );
+          })()}
 
           {/* Fila primaria: las 4 métricas que de verdad se miran a diario.
               Se diferencian de la fila secundaria con más padding, valor más
@@ -2077,7 +2109,15 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
                                 }}
                                 onClick={() => setDetailTrade(t)}>
                                 <td style={cellNumStyle}>{mt.length - idx}</td>
-                                <td style={cellDateStyle}>{t.date}</td>
+                                <td style={cellDateStyle}>
+                                  {t.date}
+                                  {t.reviewCompleted === false && (
+                                    <span title="Pendiente de completar review (razones, errores, notas)"
+                                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 14, height: 14, borderRadius: "50%", background: accentColor + "1a", color: accentColor, marginLeft: 5, verticalAlign: 2 }}>
+                                      <Zap size={9} />
+                                    </span>
+                                  )}
+                                </td>
                                 <td style={cellPad}>
                                   <InstTag inst={t.instrument} />
                                 </td>
@@ -2715,7 +2755,25 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
         {tab === "gallery" && <GalleryView trades={currentTrades} accentColor={accentColor} onTradeClick={t => setDetailTrade(t)} accountSize={accounts[account].size} />}
       </Suspense>
       {tab === "add" && !showForm && (
-        <TradeForm form={form} setForm={setForm} onSave={saveTrade} onCancel={() => setTab("calendar")} accentColor={accentColor} editId={editId} accountLabel={accountLabel} accountSize={accounts[account].size} defaultRiskPct={accounts[account].riskPct} reasonsList={reasonsList} setReasonsList={setReasonsList} setupsList={setupsList} setSetupsList={setSetupsList} errorsList={errorsList} setErrorsList={setErrorsList} instrumentSpecs={instrumentSpecs} setInstrumentSpecs={setInstrumentSpecs} />
+        <div>
+          {!editId && (
+            <div role="radiogroup" aria-label="Modo de carga" style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              <button type="button" role="radio" aria-checked={quickEntryMode} onClick={() => setQuickEntryMode(true)}
+                style={{ ...S.button(quickEntryMode ? "primary" : "secondary", accentColor), padding: "6px 14px", fontSize: FS.sm }}>
+                <Zap size={12} style={{ marginRight: 4, verticalAlign: -2 }} />Rápido
+              </button>
+              <button type="button" role="radio" aria-checked={!quickEntryMode} onClick={() => setQuickEntryMode(false)}
+                style={{ ...S.button(!quickEntryMode ? "primary" : "secondary", accentColor), padding: "6px 14px", fontSize: FS.sm }}>
+                Completo
+              </button>
+            </div>
+          )}
+          {showQuickForm ? (
+            <QuickTradeForm form={form} setForm={setForm} onSave={() => saveTrade({ reviewCompleted: false })} onCancel={() => setTab("calendar")} accentColor={accentColor} accountLabel={accountLabel} accountSize={accounts[account].size} defaultRiskPct={accounts[account].riskPct} setupsList={setupsList} setSetupsList={setSetupsList} instrumentSpecs={instrumentSpecs} setInstrumentSpecs={setInstrumentSpecs} />
+          ) : (
+            <TradeForm form={form} setForm={setForm} onSave={() => saveTrade({ reviewCompleted: true })} onCancel={() => setTab("calendar")} accentColor={accentColor} editId={editId} accountLabel={accountLabel} accountSize={accounts[account].size} defaultRiskPct={accounts[account].riskPct} reasonsList={reasonsList} setReasonsList={setReasonsList} setupsList={setupsList} setSetupsList={setSetupsList} errorsList={errorsList} setErrorsList={setErrorsList} instrumentSpecs={instrumentSpecs} setInstrumentSpecs={setInstrumentSpecs} />
+          )}
+        </div>
       )}
       </div>
       )}
@@ -2725,9 +2783,27 @@ const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNo
         <div className="hz-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(13,11,22,0.55)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: Z.modal, padding: "24px 16px", overflowY: "auto" }}
           onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setEditId(null); }}>
           <div ref={tradeFormModalRef} tabIndex={-1} className="hz-modal-in" role="dialog" aria-modal="true" aria-labelledby="tradeform-title" style={{ width: "100%", maxWidth: 580, outline: "none" }} onClick={e => e.stopPropagation()}>
-            <TradeForm form={form} setForm={setForm} onSave={saveTrade}
-              onCancel={() => { setShowForm(false); setForm(EMPTY_FORM); setEditId(null); }}
-              accentColor={accentColor} editId={editId} accountLabel={accountLabel} accountSize={accounts[account].size} defaultRiskPct={accounts[account].riskPct} reasonsList={reasonsList} setReasonsList={setReasonsList} setupsList={setupsList} setSetupsList={setSetupsList} errorsList={errorsList} setErrorsList={setErrorsList} instrumentSpecs={instrumentSpecs} setInstrumentSpecs={setInstrumentSpecs} />
+            {!editId && (
+              <div role="radiogroup" aria-label="Modo de carga" style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+                <button type="button" role="radio" aria-checked={quickEntryMode} onClick={() => setQuickEntryMode(true)}
+                  style={{ ...S.button(quickEntryMode ? "primary" : "secondary", accentColor), padding: "6px 14px", fontSize: FS.sm }}>
+                  <Zap size={12} style={{ marginRight: 4, verticalAlign: -2 }} />Rápido
+                </button>
+                <button type="button" role="radio" aria-checked={!quickEntryMode} onClick={() => setQuickEntryMode(false)}
+                  style={{ ...S.button(!quickEntryMode ? "primary" : "secondary", accentColor), padding: "6px 14px", fontSize: FS.sm }}>
+                  Completo
+                </button>
+              </div>
+            )}
+            {showQuickForm ? (
+              <QuickTradeForm form={form} setForm={setForm} onSave={() => saveTrade({ reviewCompleted: false })}
+                onCancel={() => { setShowForm(false); setForm(EMPTY_FORM); setEditId(null); }}
+                accentColor={accentColor} accountLabel={accountLabel} accountSize={accounts[account].size} defaultRiskPct={accounts[account].riskPct} setupsList={setupsList} setSetupsList={setSetupsList} instrumentSpecs={instrumentSpecs} setInstrumentSpecs={setInstrumentSpecs} />
+            ) : (
+              <TradeForm form={form} setForm={setForm} onSave={() => saveTrade({ reviewCompleted: true })}
+                onCancel={() => { setShowForm(false); setForm(EMPTY_FORM); setEditId(null); }}
+                accentColor={accentColor} editId={editId} accountLabel={accountLabel} accountSize={accounts[account].size} defaultRiskPct={accounts[account].riskPct} reasonsList={reasonsList} setReasonsList={setReasonsList} setupsList={setupsList} setSetupsList={setSetupsList} errorsList={errorsList} setErrorsList={setErrorsList} instrumentSpecs={instrumentSpecs} setInstrumentSpecs={setInstrumentSpecs} />
+            )}
           </div>
         </div>
       )}

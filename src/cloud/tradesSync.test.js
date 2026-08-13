@@ -119,6 +119,16 @@ describe("rowToTrade", () => {
     expect(trade.reviewWhatToImprove).toBe("Salir antes");
   });
 
+  it("review_completado en false se mapea a reviewCompleted:false (trade de carga rápida)", () => {
+    const row = { id: "t1", account_id: "a1", fecha: "2026-08-01", instrumento: "NAS100", review_completado: false };
+    expect(rowToTrade(row).reviewCompleted).toBe(false);
+  });
+
+  it("review_completado ausente (trade viejo, previo a esta columna) cae a true, no a false", () => {
+    const row = { id: "t1", account_id: "a1", fecha: "2026-08-01", instrumento: "NAS100" };
+    expect(rowToTrade(row).reviewCompleted).toBe(true);
+  });
+
   it("emociones_intensidad ausente cae a objeto vacío, no a undefined", () => {
     const row = { id: "t1", account_id: "a1", fecha: "2026-08-01", instrumento: "NAS100" };
     expect(rowToTrade(row).emotionIntensity).toEqual({});
@@ -296,6 +306,24 @@ describe("upsertTrade", () => {
     expect(chain.upsert).toHaveBeenCalledWith(expect.objectContaining({
       emociones_intensidad: { fomo: 4 }, revision_bien: "bien", revision_mejorar: "mejor",
     }));
+  });
+
+  it("manda review_completado:false para un trade de carga rápida", async () => {
+    const chain = makeChain({ data: { id: "t1", account_id: "acc1", fecha: "2026-08-01", instrumento: "NAS100" }, error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await upsertTrade({ id: "t1", accountId: "acc1", date: "2026-08-01", instrument: "NAS100", reviewCompleted: false });
+
+    expect(chain.upsert).toHaveBeenCalledWith(expect.objectContaining({ review_completado: false }));
+  });
+
+  it("reviewCompleted ausente cae a true por default al upsert (no rompe trades cargados antes de esta feature)", async () => {
+    const chain = makeChain({ data: { id: "t1", account_id: "acc1", fecha: "2026-08-01", instrumento: "NAS100" }, error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await upsertTrade({ id: "t1", accountId: "acc1", date: "2026-08-01", instrument: "NAS100" });
+
+    expect(chain.upsert).toHaveBeenCalledWith(expect.objectContaining({ review_completado: true }));
   });
 
   it("emotionIntensity/review ausentes caen a default vacío/null, no a undefined", async () => {

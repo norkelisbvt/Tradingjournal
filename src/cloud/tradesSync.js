@@ -100,6 +100,7 @@ export function rowToTrade(row) {
     notes: row.notas ?? undefined,
     reviewWhatWorked: row.revision_bien ?? undefined,
     reviewWhatToImprove: row.revision_mejorar ?? undefined,
+    reviewCompleted: row.review_completado ?? true,
     imagenAntesKey: row.imagen_antes_key,
     imagenDespuesKey: row.imagen_despues_key,
     updatedAt: row.updated_at,
@@ -208,6 +209,7 @@ export async function upsertTrade(trade, { force = false } = {}) {
     notas: trade.notes ?? null,
     revision_bien: trade.reviewWhatWorked ?? null,
     revision_mejorar: trade.reviewWhatToImprove ?? null,
+    review_completado: trade.reviewCompleted ?? true,
     imagen_antes_key: trade.imagenAntesKey ?? null,
     imagen_despues_key: trade.imagenDespuesKey ?? null,
   };

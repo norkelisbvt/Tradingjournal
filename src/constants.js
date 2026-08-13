@@ -69,6 +69,10 @@ export const EMPTY_FORM = {
   entry: "", exit: "", stopLoss: "", size: "", rr: "", riskPct: "", pnl: "", notes: "", setups: [],
   reasons: {}, emotions: [], emotionIntensity: {}, errors: [], tags: [], imgBefore: null, imgAfter: null,
   reviewWhatWorked: "", reviewWhatToImprove: "",
+  // true por defecto: el form completo ya expone todos los campos, así que
+  // dejar algo vacío ahí es una elección consciente, no un review pendiente.
+  // Solo la carga rápida (QuickTradeForm) lo pone en false explícitamente.
+  reviewCompleted: true,
 };
 export const DEMO_TRADES = {
   "personal-1": [
