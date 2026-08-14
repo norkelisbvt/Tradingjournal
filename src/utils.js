@@ -205,6 +205,23 @@ export function toISODate(d) {
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
+
+// Infiere la sesión de trading a partir de la hora UTC (0-23) — las sesiones
+// se definen por horario de mercado real (Londres, Nueva York, Asia), no por
+// la hora local de quien está cargando el trade, así que SIEMPRE se calcula
+// sobre UTC y se espera que el llamador convierta con getUTCHours(), nunca
+// con getHours(). Rangos aproximados (el trader puede corregir con un click
+// si su bróker usa un horario de sesión ligeramente distinto):
+//   Asian:    00:00–07:59 UTC
+//   London:   08:00–12:59 UTC
+//   Overlap:  13:00–16:59 UTC (Londres + Nueva York solapadas)
+//   New York: 17:00–23:59 UTC
+export function inferSessionFromUTCHour(hourUTC) {
+  if (hourUTC >= 0 && hourUTC < 8) return "Asian";
+  if (hourUTC >= 8 && hourUTC < 13) return "London";
+  if (hourUTC >= 13 && hourUTC < 17) return "Overlap";
+  return "New York";
+}
 export function startOfWeekDate(d) {
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);

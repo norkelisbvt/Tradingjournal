@@ -33,7 +33,7 @@ import {
   computeAdvancedMetrics, computeCurrentStreak, streakTier, computePlaybookAdherence,
   computeRiskAlerts, migrateAccountsData, money, pctFmt, moneyCompact, validateTradeForm,
   groupOf, toggleInstrument, isWinPnl, isLossPnl, isBEPnl, toISODate,
-  computeHoldTimeStats, formatDuration, computeEmotionStats,
+  computeHoldTimeStats, formatDuration, computeEmotionStats, inferSessionFromUTCHour,
 } from "./utils.js";
 
 // ─── computeAdvancedMetrics ─────────────────────────────────────────────────
@@ -497,5 +497,19 @@ describe("computeEmotionStats", () => {
     const stats = computeEmotionStats(trades, 0);
     expect(stats[0].id).toBe("confident");
     expect(stats[1].id).toBe("revenge");
+  });
+});
+
+// ─── inferSessionFromUTCHour ────────────────────────────────────────────────
+describe("inferSessionFromUTCHour", () => {
+  it("clasifica cada franja horaria UTC en la sesión esperada", () => {
+    expect(inferSessionFromUTCHour(0)).toBe("Asian");
+    expect(inferSessionFromUTCHour(7)).toBe("Asian");
+    expect(inferSessionFromUTCHour(8)).toBe("London");
+    expect(inferSessionFromUTCHour(12)).toBe("London");
+    expect(inferSessionFromUTCHour(13)).toBe("Overlap");
+    expect(inferSessionFromUTCHour(16)).toBe("Overlap");
+    expect(inferSessionFromUTCHour(17)).toBe("New York");
+    expect(inferSessionFromUTCHour(23)).toBe("New York");
   });
 });

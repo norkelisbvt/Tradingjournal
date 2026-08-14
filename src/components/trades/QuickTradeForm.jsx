@@ -9,7 +9,7 @@ import { useEffect, useMemo, memo } from "react";
 import { Zap, AlertTriangle } from "lucide-react";
 import { T, FS, S } from "../../theme";
 import { INSTRUMENTS, DIRECTIONS, SESSIONS, EMOTIONS } from "../../constants";
-import { instLabel, instEmoji, validateTradeForm, money } from "../../utils";
+import { instLabel, instEmoji, validateTradeForm, money, inferSessionFromUTCHour } from "../../utils";
 import { SetupSelector } from "./SetupSelector";
 import { PositionSizeCalculator } from "./PositionSizeCalculator";
 
@@ -38,6 +38,19 @@ function QuickEmotionPicker({ selected, onChange }) {
 
 const QuickTradeForm = memo(function QuickTradeForm({ form, setForm, onSave, onCancel, accentColor, accountLabel, accountSize, defaultRiskPct, setupsList, setSetupsList, instrumentSpecs, setInstrumentSpecs }) {
   const f = field => e => setForm(p => ({ ...p, [field]: e.target.value }));
+
+  // Auto-completar hora + sesión al abrir un trade NUEVO en modo rápido —
+  // un click menos. Solo corre una vez al montar y solo si `time` está
+  // vacío (así no pisa un valor que el usuario ya haya cargado si, por
+  // ejemplo, vuelve de "Completo" a "Rápido" sin perder lo tipeado).
+  useEffect(() => {
+    if (form.time) return;
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    setForm(p => ({ ...p, time: `${hh}:${mm}`, session: inferSessionFromUTCHour(now.getUTCHours()) }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const calcRR = useMemo(() => {
     const e = parseFloat(form.entry), x = parseFloat(form.exit), sl = parseFloat(form.stopLoss);

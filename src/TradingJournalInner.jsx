@@ -50,6 +50,7 @@ import { useTradeFilters } from "./hooks/useTradeFilters";
 import { useConfigurableLists } from "./hooks/useConfigurableLists";
 import { usePersistenceStatus } from "./hooks/usePersistenceStatus";
 import { useTradeEditSession } from "./hooks/useTradeEditSession";
+import { useCoreData } from "./hooks/useCoreData";
 import { idbGetImage, isImageRef, migrateEmbeddedImages } from "./lib/imageStore";
 import { WEEKDAY_HEADER_LABELS } from "./styles/sharedStyles";
 import { useCloudSync, newId } from "./cloud/cloudSync";
@@ -381,10 +382,15 @@ function FinanceSkeleton() {
 }
 
 const TradingJournalInnerImpl = memo(function TradingJournalInnerImpl({ onLockNow, onChangePin }) {
-  const [account, setAccount] = useState("personal-1");
-  const [trades, setTrades] = useState(DEMO_TRADES);
-  const [accounts, setAccounts] = useState(DEFAULT_ACCOUNTS);
-  const [accountOrder, setAccountOrder] = useState(DEFAULT_ACCOUNT_ORDER);
+  // Datos core (cuenta activa, trades, cuentas, orden) — extraídos a un hook
+  // aparte, ver hooks/useCoreData.js. Va primero porque useNavigationView
+  // necesita `account` como argumento.
+  const {
+    account, setAccount,
+    trades, setTrades,
+    accounts, setAccounts,
+    accountOrder, setAccountOrder,
+  } = useCoreData();
   // Navegación / vista (tab activo, año-mes visualizado, agrupación,
   // paginación) — extraído a un hook aparte, ver hooks/useNavigationView.js.
   const {
